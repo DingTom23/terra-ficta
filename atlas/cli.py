@@ -43,6 +43,20 @@ def render_sheet(seed: int, width: int = 1400, height: int = 950, scale: int = 0
     return world, namer, page, labels
 
 
+def _title_for(seed: int, override: str | None = None) -> str:
+    """The country's name, drawn once and carried everywhere.
+
+    The cartouche, the contents, the gazetteer and the index must all print the
+    same name.  Drawing it twice from the same generator gives two different
+    names, because the generator has advanced in between -- so it is drawn here,
+    once, and passed down.
+    """
+    if override:
+        return override
+    namer = Namer(seed)
+    return namer.title(namer.cultures[0])
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="atlas",
@@ -83,9 +97,9 @@ def main(argv=None):
 
     for i, seed in enumerate(seeds):
         pnum = next_plate()
+        name = _title_for(seed, args.title if len(seeds) == 1 else None)
         world, namer, page, labels = render_sheet(
-            seed, args.width, args.height, args.scale,
-            args.title if len(seeds) == 1 else None, plate=pnum)
+            seed, args.width, args.height, args.scale, name, plate=pnum)
 
         path = Path(args.out) if (args.out and len(seeds) == 1) else outdir / f"atlas_{seed:04d}.png"
         page.save(path)
@@ -96,14 +110,13 @@ def main(argv=None):
         if args.political:
             pol_num = next_plate()
             _, _, pol_page, _ = render_sheet(
-                seed, args.width, args.height, args.scale, None,
+                seed, args.width, args.height, args.scale, name,
                 plate=pol_num, mode="political")
             ppath = outdir / f"atlas_{seed:04d}_political.png"
             pol_page.save(ppath)
             print(f"  -> {ppath}")
 
-        title, subtitle, paras = gazetteer.describe(
-            world, labels, namer.title(namer.cultures[0]))
+        title, subtitle, paras = gazetteer.describe(world, labels, name)
         sheets.append(dict(plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
                            title=title, subtitle=subtitle, paras=paras, labels=labels))
         cards.append((path, title, subtitle, paras))
@@ -142,8 +155,9 @@ def main(argv=None):
 def _assemble_book(sheets, seeds):
     size = book.PAGE
     pages = []
-    pages.append(book.title_page(size, "Atlas", "countries that were never surveyed",
-                                 roman(1800 + (seeds[0] % 99)), len(sheets)))
+    n_plates = sum(1 + (1 if s.get("pol_page") is not None else 0) for s in sheets)
+    pages.append(book.title_page(size, "Terra Ficta", "countries that were never surveyed",
+                                 roman(1800 + (seeds[0] % 99)), n_plates))
     pages.append(book.colophon_page(size, COLOPHON))
 
     contents = []

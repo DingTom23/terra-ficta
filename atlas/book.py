@@ -46,6 +46,13 @@ def _rule(draw, y, width, x0, x1, ink, weight=1):
     draw.line([(x0, y), (x1, y)], fill=ink, width=weight)
 
 
+def _tracked_width(draw, text, fnt, tracking):
+    """Width of a letter-spaced run, in pixels -- what tracked_text will ink."""
+    if not text:
+        return 0.0
+    return sum(draw.textlength(ch, font=fnt) for ch in text) + tracking * (len(text) - 1)
+
+
 def title_page(size, title, subtitle, year, plates):
     w, h = size
     page, draw = _blank(size)
@@ -56,8 +63,14 @@ def title_page(size, title, subtitle, year, plates):
     draw.rectangle([m, m, w - m, h - m], outline=ink, width=max(2, int(m * 0.045)))
     draw.rectangle([m * 1.35, m * 1.35, w - m * 1.35, h - m * 1.35], outline=ink, width=1)
 
+    # A title is set to the frame, not to a fixed size: "TERRA FICTA" at 8.5 per
+    # cent of the sheet runs straight through both borders.
     f1 = decor.font("antiqua-bold", int(w * 0.085))
-    decor.tracked_text(draw, (w / 2, h * 0.30), title.upper(), f1, ink, tracking=f1.size * 0.34)
+    track = f1.size * 0.34
+    while f1.size > 24 and _tracked_width(draw, title.upper(), f1, track) > w * 0.78:
+        f1 = decor.font("antiqua-bold", f1.size - 2)
+        track = f1.size * 0.34
+    decor.tracked_text(draw, (w / 2, h * 0.30), title.upper(), f1, ink, tracking=track)
 
     _rule(draw, h * 0.40, 0, w * 0.36, w * 0.64, ink, 1)
     draw.ellipse([w / 2 - 4, h * 0.40 - 4, w / 2 + 4, h * 0.40 + 4], fill=ink)
@@ -67,7 +80,8 @@ def title_page(size, title, subtitle, year, plates):
     draw.text((w / 2, h * 0.455), subtitle, font=f2, fill=soft, anchor="mm")
 
     f3 = decor.font("serif", int(w * 0.016))
-    draw.text((w / 2, h * 0.58), f"{plates} plates", font=f3, fill=soft, anchor="mm")
+    draw.text((w / 2, h * 0.58), f"{plates} plate" if plates == 1 else f"{plates} plates",
+              font=f3, fill=soft, anchor="mm")
     draw.text((w / 2, h * 0.625), year, font=decor.font("antiqua", int(w * 0.018)),
               fill=ink, anchor="mm")
 
@@ -140,7 +154,7 @@ def contents_page(size, entries):
     return page
 
 
-def index_pages(size, entries, per_page=64):
+def index_pages(size, entries, per_page=None):
     """An index set in two columns, as an index should be.
 
     One narrow column leaves two thirds of the page blank and forces the list
@@ -151,7 +165,18 @@ def index_pages(size, entries, per_page=64):
     ink = tuple(int(c * 255) for c in INK)
     soft = tuple(int(c * 255) for c in INK_SOFT)
 
-    chunks = [entries[i:i + per_page * 2] for i in range(0, len(entries), per_page * 2)]
+    f = decor.font("serif", int(w * 0.0135))
+    top = h * 0.205
+    bottom = h * 0.875
+    # Leading comes from the type, not from the number of entries: squeezing
+    # rows to fit a fixed count is what made the index collide with itself.
+    lead = int(f.size * 1.62)
+    rows = max(1, int((bottom - top) // lead))
+    if per_page:
+        rows = max(1, min(rows, per_page))
+    per_page = rows * 2
+    chunks = [entries[i:i + per_page] for i in range(0, len(entries), per_page)]
+
     for page_no, chunk in enumerate(chunks or [[]]):
         page, draw = _blank(size)
         head = decor.font("antiqua-bold", int(w * 0.024))
@@ -160,13 +185,9 @@ def index_pages(size, entries, per_page=64):
                            tracking=head.size * 0.3)
         _rule(draw, h * 0.155, 0, w * 0.36, w * 0.64, ink, 1)
 
-        f = decor.font("serif", int(w * 0.0142))
-        half = min(per_page, (len(chunk) + 1) // 2) if chunk else 0
-        top = h * 0.215
-        lead = min(int(f.size * 1.85), int((h * 0.80 - top) / max(half, 1)))
-
+        half = min(rows, (len(chunk) + 1) // 2) if chunk else 0
         for col in range(2):
-            part = chunk[col * half:(col + 1) * half] if col else chunk[:half]
+            part = chunk[col * half:(col + 1) * half]
             x0 = w * (0.12 + 0.42 * col)
             x1 = w * (0.46 + 0.42 * col)
             y = top
