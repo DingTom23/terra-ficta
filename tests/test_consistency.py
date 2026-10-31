@@ -158,3 +158,42 @@ def test_a_crop_measures_a_river_of_real_length():
     assert longest.length_km > 0.20 * span_km, (
         f"the longest river is only {longest.length_km:.0f} km across a "
         f"{span_km:.0f} km map -- the trace is stopping early")
+
+def test_every_named_place_has_a_dictionary_entry():
+    """A name printed on the plate must be a name the dictionary explains."""
+    world, labels = _world_and_labels()
+    feats = features.measure(world, labels)
+    ents = gazetteer.entries(world, labels, feats)
+    heads = {e.head.lower() for e in ents}
+    missing = sorted({lb.text for lb in labels if lb.text.lower() not in heads})
+    assert not missing, f"printed but never described: {missing}"
+
+
+def test_dictionary_numbers_are_the_measured_ones():
+    """No figure in the prose may be invented: it must come from the survey."""
+    world, labels = _world_and_labels()
+    feats = features.measure(world, labels)
+    ents = {e.head.lower(): e for e in gazetteer.entries(world, labels, feats)}
+
+    river = feats.longest_river()
+    text = ents[river.name.lower()].text
+    assert gazetteer._count(river.length_km, 1) in text, "the river length is not the measured one"
+
+    big = feats.largest_province()
+    text = ents[big.name.lower()].text
+    assert gazetteer._count(big.area_km2) in text, "the province area is not the measured one"
+
+    seat = feats.chief_town()
+    text = ents[seat.name.lower()].text
+    assert f"{seat.pop:,}" in text, "the seat's population is not the one measured"
+
+
+def test_every_entry_has_a_page():
+    """The index can only point at a folio if the dictionary recorded one."""
+    world, labels = _world_and_labels()
+    feats = features.measure(world, labels)
+    ents = gazetteer.entries(world, labels, feats)
+    pages, page_of = gazetteer.entry_pages(book.PAGE, "Testland", ents)
+    assert len(pages) >= 1
+    missing = [e.head for e in ents if e.head.lower() not in page_of]
+    assert not missing, f"entries with no folio: {missing}"

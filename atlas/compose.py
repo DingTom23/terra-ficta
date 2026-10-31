@@ -201,7 +201,7 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         sub = f"surveyed in the year {roman(1800 + (spec.seed % 99))}"
 
     # --- names ----------------------------------------------------------
-    labels = build_labels(view, namer)
+    labels = build_labels(view, namer, avoid=(name,))
     for lb in labels:
         face, frac, track_f = STYLES[lb.kind]
         px = max(10, int(frac * RW))

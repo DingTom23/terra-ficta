@@ -42,9 +42,10 @@ finished plate:
 | **Framing** | the plate is cut to its subject: the largest landmass plus any island that mostly falls inside it, then a furniture solver finds open water for the cartouche, compass, keys and scale bar |
 | **The physical sheet** | hypsometric tints, hillshade, jittered slope hachures drawn down the fall line, contours, coastal hachures, soundings, rhumb lines, graticule, graduated chequer border, compass, scale, two keys, cartouche, plate number |
 | **The political sheet** | the same country flat-washed by province, boundaries drawn solid, a numbered key, and the relief dropped to a whisper |
-| **The book** | title page, colophon, contents with dot leaders, numbered plates, gazetteer pages, index of names |
+| **The dictionary** | one alphabetical entry per named place, set in two columns, every figure in it measured off the terrain: rank, population, elevation, distance inland, the river it stands on, the range it rises in, the sea it reaches |
+| **The book** | title page, colophon, contents with dot leaders, numbered plates, a survey and a dictionary per country, an index of names whose folios point at the entries |
 
-Output is a PNG at roughly 2700×2000, a bound PDF of twenty-two pages, and a
+Output is a PNG at roughly 2700×2000, a bound PDF of forty-odd pages, and a
 static viewer you can pan and zoom.
 
 ---
@@ -208,9 +209,8 @@ Still wrong, and known to be wrong:
 - Region names are now compulsory, but on about one seed in six a province
   still finds nowhere to write: it is then tinted on the plate and missing from
   the key, which is the one inconsistency a reader will actually notice.
-- The gazetteer measures what it describes — lengths, areas, distances, which
-  range holds the peak — but a survey is not a story. It can tell you the
-  Skoskogei runs 2 910 kilometres and still not tell you what it is like to
-  stand on its bank.
+- The dictionary is thin. Every entry is a measurement — a rank, an elevation,
+  a distance — and nothing else. There is no trade, no history, no reason for
+  the town to be there. A real gazetteer entry has a *why*.
 - Nothing in the book is written by a person, including the colophon, which is
   the one place a person ought to be speaking.

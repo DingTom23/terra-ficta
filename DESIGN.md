@@ -391,6 +391,37 @@ the invariant is checkable rather than merely intended.
 
 ---
 
+## 22. A gazetteer is a measurement, not a mood
+
+The first version of the dictionary wrote sentences about a country: "the
+longest river", "the largest town".  Every one of those superlatives was a
+guess about list order, and list order was the order the labels happened to be
+built in.  The river called longest was simply the first river label.
+
+The rule that replaced it: **a fact in the prose must be a field on a dataclass
+that something computed.**  `features.measure()` walks the receivers and the
+accumulation grid once and returns `River.length_km`, `Town.pop`, `Range.high_m`,
+`Province.area_km2`, `Sea.shore`.  The prose formats those fields and nothing
+else.  If a sentence needs a fact that is not on the dataclass, the fact gets
+measured, not invented.
+
+Two consequences worth keeping:
+
+- The measurement found a real bug.  A river measured 40 km where the map
+  showed 2,770, because `World.cropped()` re-routed the cropped grid without
+  filling its depressions first — every pit became a sink and the channel ended
+  in mid-air.  The prose was right and the routing was wrong.
+- The prose exposed a cartographic error nobody had noticed on the plate: every
+  town sat at 1 m above the sea.  The site score rewarded `near_water` and
+  `river` so strongly that the best cell in the country was always a river
+  mouth.  Twelve towns, twelve mudflats.  A `shelf` term — a gaussian centred on
+  140 m — moved them upstream to where a town that lives by water actually
+  stands.  Nothing on the plate had looked wrong, because a dot at the coast
+  looks like a port.
+
+That is the argument for writing the book at all: prose is a test suite for
+geometry.
+
 ## Smaller decisions worth recording
 
 **The border is a measuring instrument.** A graduated chequer band outside the neat

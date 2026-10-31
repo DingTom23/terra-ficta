@@ -117,7 +117,7 @@ def _river_angle(rec, x, y, ww, steps=12):
 
 
 def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
-                 n_towns=12, n_rivers=2, width=None, height=None):
+                 n_towns=24, n_rivers=3, width=None, height=None, avoid=()):
     """Return a priority-ordered list of labels in map-cell coordinates."""
     h = world.height
     hh, ww = h.shape
@@ -129,6 +129,18 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
 
     cultures = namer.cultures
     labels: list[Label] = []
+
+    # Nothing on the sheet may share a name with anything else on it.  A
+    # province called what the country is called is the one a reader notices.
+    used = {a.strip().upper() for a in avoid}
+
+    def unique(fn):
+        for _ in range(60):
+            name = fn()
+            if name.upper() not in used:
+                used.add(name.upper())
+                return name
+        return name
 
     # --- regions --------------------------------------------------------
     prov = getattr(world, "provinces", None)
@@ -166,7 +178,7 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
             # named in: everything inside province j must speak culture j.
             culture = cultures[int(j) % len(cultures)]
             labels.append(Label(
-                text=namer.place(culture, "region").upper(),
+                text=unique(lambda: namer.place(culture, "region").upper()),
                 x=float(xs[i]), y=float(ys[i]), kind="region", size=30,
                 tracking=5.0, priority=3, prov=int(j), culture=int(j) % len(cultures),
             ))
@@ -184,7 +196,7 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
                 continue
             culture = cultures[j % len(cultures)]
             labels.append(Label(
-                text=namer.place(culture, "region").upper(),
+                text=unique(lambda: namer.place(culture, "region").upper()),
                 x=spot[0], y=spot[1], kind="region", size=30,
                 tracking=5.0, priority=3,
             ))
@@ -242,12 +254,16 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
         near_water = np.maximum(near_water, _dilate(coast, r).astype(np.float32))
     river = acc > max(40.0, np.percentile(acc[land], 97.0)) if land.any() else np.zeros_like(land)
 
+    # A site at one metre above the tide is a mudflat, not a market.  The
+    # shelf term pulls the choice a little upstream of every river mouth,
+    # which is where a town that lives by water actually stands.
+    shelf = np.exp(-((np.log1p(np.maximum(h, 0.0)) - np.log(140.0)) / 1.5) ** 2)
     score = (
-        np.clip(np.log1p(acc) / 9.0, 0, 1) * 0.45
-        + np.clip(h / 900.0, 0, 1) * -0.20
-        + near_water * 0.25
-        + river * 0.30
-        + land * 0.10
+        np.clip(np.log1p(acc) / 9.0, 0, 1) * 0.38
+        + near_water * 0.16
+        + river * 0.24
+        + shelf * 0.26
+        + land * 0.06
     )
     score = score * land
     flat = score.ravel()
@@ -257,7 +273,7 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
         y, x = divmod(int(idx), ww)
         if not land[y, x]:
             continue
-        if any((x - px) ** 2 + (y - py) ** 2 < (ww * 0.085) ** 2 for px, py in picked):
+        if any((x - px) ** 2 + (y - py) ** 2 < (ww * 0.052) ** 2 for px, py in picked):
             continue
         picked.append((x, y))
         if len(picked) >= n_towns:
@@ -280,7 +296,7 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
         # tongue and the province name matched neither of them.
         ci = _culture_index(prov, cultures, x, y, fallback=i)
         labels.append(Label(
-            text=namer.place(cultures[ci], "town", suffix=True),
+            text=unique(lambda: namer.place(cultures[ci], "town", suffix=True)),
             x=float(x), y=float(y), kind="town", size=15, priority=6, dot=True,
             rank=ranks[i], prov=int(prov[int(y), int(x)]) if prov is not None else -1,
             culture=ci,
@@ -303,7 +319,7 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
                 continue
             ci = _culture_index(prov, cultures, spot[0], spot[1], fallback=j + 3)
             labels.append(Label(
-                text=namer.place(cultures[ci], "river", suffix=False),
+                text=unique(lambda: namer.place(cultures[ci], "river", suffix=False)),
                 x=spot[0], y=spot[1], kind="river", size=15,
                 tracking=1.5,
                 angle=_river_angle(rec.ravel(), spot[0], spot[1], ww),

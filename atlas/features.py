@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .climate import BIOMES
 from .hydro import OFFSETS
 
 
@@ -31,6 +32,10 @@ class River:
     mouth: tuple[int, int]
     reaches_sea: bool
     drained_km2: float
+    source_m: float = 0.0
+    range_name: str = ""
+    mouth_sea: str = ""
+    flow: str = ""
 
 
 @dataclass
@@ -43,6 +48,11 @@ class Town:
     nearest_km: float
     capital: bool = False
     nearest: str = ""
+    elev_m: float = 0.0
+    river: str = ""
+    to_seat_km: float = 0.0
+    coast_km: float = -1.0
+    pop: int = 0
 
 
 @dataclass
@@ -53,6 +63,8 @@ class Range:
     prov: int
     high_m: float
     holds_peak: bool
+    extent_km: float = 0.0
+    provinces: str = ""
 
 
 @dataclass
@@ -61,6 +73,19 @@ class Province:
     name: str
     cells: int
     area_km2: float
+    seat: str = ""
+    towns: int = 0
+    biome: str = ""
+    coast_km: float = 0.0
+
+
+@dataclass
+class Sea:
+    name: str
+    x: int
+    y: int
+    shore: str = ""
+    rivers: int = 0
 
 
 @dataclass
@@ -69,6 +94,7 @@ class Features:
     towns: list = field(default_factory=list)
     ranges: list = field(default_factory=list)
     provinces: list = field(default_factory=list)
+    seas: list = field(default_factory=list)
     peak_m: float = 0.0
     land_km2: float = 0.0
 
@@ -103,6 +129,62 @@ def cell_km(world) -> tuple[float, float]:
     km_y = span * 111.32 / max(hh, 1)
     mid = math.radians(0.5 * (spec.lat_top + spec.lat_bottom))
     return km_y * math.cos(mid), km_y
+
+
+_COMPASS = ("east", "north-east", "north", "north-west",
+            "west", "south-west", "south", "south-east")
+_SHORE = ("eastern", "north-eastern", "northern", "north-western",
+          "western", "south-western", "southern", "south-eastern")
+
+
+def _bearing(dx: float, dy: float) -> int:
+    """Index into the compass tables. +x is east, +y is south."""
+    a = math.atan2(-dy, dx)
+    return int(round(a / (math.pi / 4.0))) % 8
+
+
+def _compass(dx: float, dy: float) -> str:
+    return _COMPASS[_bearing(dx, dy)]
+
+
+def _seed_of(name: str) -> int:
+    """A stable small integer from a name (Python's hash() is salted)."""
+    return sum((i + 1) * ord(c) for i, c in enumerate(name)) % (2 ** 31)
+
+
+def _dilate(mask):
+    """One cell of 4-connected growth."""
+    out = mask.copy()
+    out[1:, :] |= mask[:-1, :]
+    out[:-1, :] |= mask[1:, :]
+    out[:, 1:] |= mask[:, :-1]
+    out[:, :-1] |= mask[:, 1:]
+    return out
+
+
+def _provinces_phrase(counts: dict, names: dict) -> str:
+    """'A', 'A and B', 'A, B and C' -- in order of how much ground each holds."""
+    parts = [names[j].title() for j in sorted(counts, key=lambda j: -counts[j])
+             if j in names]
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return f"{parts[0]} and {parts[1]}"
+    return ", ".join(parts[:-1]) + f" and {parts[-1]}"
+
+
+def _nearest(items, x, y, km_x, km_y, limit_km):
+    """The nearest item with .x/.y, and its distance; None beyond the limit."""
+    best, best_d = None, float("inf")
+    for it in items:
+        d = math.hypot((it.x - x) * km_x, (it.y - y) * km_y)
+        if d < best_d:
+            best, best_d = it, d
+    if best is None or best_d > limit_km:
+        return None, best_d
+    return best, best_d
 
 
 def _neighbour_index(i, ww, hh):
@@ -162,6 +244,9 @@ def measure(world, labels) -> Features:
     acc = world.accumulation.ravel()
     rec = world.drainage["receivers"]
     prov_grid = getattr(world, "provinces", None)
+    inland = world.meta.get("inland")
+    if inland is None:
+        inland = np.zeros_like(h)
     km_x, km_y = cell_km(world)
     cell_area = km_x * km_y
 
@@ -183,10 +268,13 @@ def measure(world, labels) -> Features:
 
     for lb in labels:
         if lb.kind == "town":
+            x, y = int(lb.x), int(lb.y)
             feats.towns.append(Town(
-                name=lb.text, x=int(lb.x), y=int(lb.y), prov=prov_at(int(lb.x), int(lb.y)),
+                name=lb.text, x=x, y=y, prov=prov_at(x, y),
                 rank=getattr(lb, "rank", 2), nearest_km=float("inf"),
                 capital=bool(getattr(lb, "capital", False)),
+                elev_m=float(max(h[y, x], 0.0)),
+                coast_km=float(inland[y, x]) * 4200.0,
             ))
     for t in feats.towns:
         for other in feats.towns:
@@ -198,6 +286,9 @@ def measure(world, labels) -> Features:
         if not math.isfinite(t.nearest_km):
             t.nearest_km = 0.0
 
+    names = {int(lb.prov): lb.text for lb in labels
+             if lb.kind == "region" and getattr(lb, "prov", -1) >= 0}
+
     peak_flat = int(np.argmax(h))
     peak_y, peak_x = divmod(peak_flat, ww)
     radius = max(6, int(0.09 * max(ww, hh)))
@@ -207,17 +298,82 @@ def measure(world, labels) -> Features:
         x, y = int(lb.x), int(lb.y)
         y0, y1 = max(0, y - radius), min(hh, y + radius)
         x0, x1 = max(0, x - radius), min(ww, x + radius)
-        high = float(h[y0:y1, x0:x1].max())
+        win = h[y0:y1, x0:x1]
+        high = float(win.max())
         holds = (x0 <= peak_x < x1) and (y0 <= peak_y < y1)
+        # How far the high ground runs: the diagonal of every cell standing
+        # within a quarter of the local maximum.  A ridge is long and thin, so
+        # this measures its length rather than the window's width.
+        hi = win >= high * 0.75
+        if hi.any():
+            ys_, xs_ = np.where(hi)
+            extent = math.hypot((xs_.max() - xs_.min()) * km_x,
+                                (ys_.max() - ys_.min()) * km_y)
+        else:
+            extent = 0.0
+        crossed = {}
+        if prov_grid is not None:
+            ids, counts = np.unique(prov_grid[y0:y1, x0:x1][hi], return_counts=True)
+            crossed = {int(i): int(c) for i, c in zip(ids, counts) if int(i) >= 0}
         feats.ranges.append(Range(
-            name=lb.text, x=x, y=y, prov=prov_at(x, y), high_m=high, holds_peak=holds))
+            name=lb.text, x=x, y=y, prov=prov_at(x, y), high_m=high,
+            holds_peak=holds, extent_km=extent,
+            provinces=_provinces_phrase(crossed, names)))
 
-    names = {int(lb.prov): lb.text for lb in labels
-             if lb.kind == "region" and getattr(lb, "prov", -1) >= 0}
+    water = h <= 0
+    shore = water | _dilate(water)
+    biome = getattr(world, "biome", None)
     if prov_grid is not None:
         for j in sorted(names):
             cells = int((prov_grid == j).sum())
-            feats.provinces.append(Province(
-                index=j, name=names[j], cells=cells, area_km2=cells * cell_area))
+            prov = Province(index=j, name=names[j], cells=cells,
+                            area_km2=cells * cell_area)
+            inside = [t for t in feats.towns if t.prov == j]
+            prov.towns = len(inside)
+            if inside:
+                prov.seat = min(inside, key=lambda t: (not t.capital, t.rank)).name
+            if biome is not None:
+                vals, counts = np.unique(biome[prov_grid == j], return_counts=True)
+                if len(vals):
+                    prov.biome = BIOMES[int(vals[int(np.argmax(counts))])][0]
+            prov.coast_km = int(((prov_grid == j) & shore).sum()) * 0.5 * (km_x + km_y)
+            feats.provinces.append(prov)
+
+    land_cx = float(np.where(land)[1].mean()) if land.any() else ww / 2.0
+    land_cy = float(np.where(land)[0].mean()) if land.any() else hh / 2.0
+    for lb in labels:
+        if lb.kind != "water":
+            continue
+        # The shore the sea washes is the shore the land is on.
+        feats.seas.append(Sea(
+            name=lb.text, x=int(lb.x), y=int(lb.y),
+            shore=_SHORE[_bearing(land_cx - lb.x, land_cy - lb.y)],
+        ))
+
+    # --- second pass: facts that need more than one list -----------------
+    for t in feats.towns:
+        near, _ = _nearest(feats.rivers, t.x, t.y, km_x, km_y, 45.0)
+        if near is not None:
+            t.river = near.name
+
+    chief = feats.chief_town()
+    for t in feats.towns:
+        if chief is not None and t is not chief:
+            t.to_seat_km = math.hypot((chief.x - t.x) * km_x, (chief.y - t.y) * km_y)
+        base = {0: 2500, 1: 700, 2: 90}.get(t.rank, 90)
+        rng = np.random.default_rng(_seed_of(t.name))
+        t.pop = int(round(base * (0.6 + 1.1 * rng.random()) / 10.0)) * 10
+
+    for r in feats.rivers:
+        r.source_m = float(max(h[r.source[0], r.source[1]], 0.0))
+        r.flow = _compass(r.mouth[1] - r.source[1], r.mouth[0] - r.source[0])
+        near, _ = _nearest(feats.ranges, r.source[1], r.source[0], km_x, km_y, 180.0)
+        r.range_name = near.name if near is not None else ""
+        if r.reaches_sea:
+            sea, _ = _nearest(feats.seas, r.mouth[1], r.mouth[0], km_x, km_y, 1e9)
+            r.mouth_sea = sea.name if sea is not None else ""
+
+    for s in feats.seas:
+        s.rivers = sum(1 for r in feats.rivers if r.mouth_sea == s.name)
 
     return feats

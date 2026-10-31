@@ -12,7 +12,7 @@ from .config import WorldSpec
 from .world import build_world
 from .naming import Namer, roman
 from .compose import compose
-from . import book, gazetteer, web
+from . import book, features, gazetteer, web
 
 COLOPHON = [
     "Every plate in this book was computed, not drawn.  A single integer is "
@@ -116,9 +116,12 @@ def main(argv=None):
             pol_page.save(ppath)
             print(f"  -> {ppath}")
 
-        title, subtitle, paras = gazetteer.describe(view, labels, name)
+        feats = features.measure(view, labels)
+        title, subtitle, paras = gazetteer.describe(view, labels, name, feats)
+        ents = gazetteer.entries(view, labels, feats)
         sheets.append(dict(plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
-                           title=title, subtitle=subtitle, paras=paras, labels=labels))
+                           title=title, subtitle=subtitle, paras=paras, labels=labels,
+                           entries=ents))
         cards.append((path, title, subtitle, paras))
         viewer_items.append({"image": path.name, "title": title,
                              "subtitle": subtitle, "paras": paras,
@@ -158,35 +161,55 @@ def _plate_count(sheets) -> int:
 
 
 def _assemble_book(sheets, seeds):
+    """Bind plates, surveys, dictionaries and an index into one volume.
+
+    Folios have to be known before the contents and the index can be set, so
+    the body is laid out first and only then wrapped in its front and back
+    matter.  Every name the index lists points at the page where the
+    dictionary actually describes it.
+    """
     size = book.PAGE
-    pages = []
     n_plates = _plate_count(sheets)
-    pages.append(book.title_page(size, "Terra Ficta", "countries that were never surveyed",
-                                 roman(1800 + (seeds[0] % 99)), n_plates))
-    pages.append(book.colophon_page(size, COLOPHON))
 
     contents = []
     index = {}
-    folio = 3
+    body = []
+    folio = 3                                   # title, colophon, contents
     for sheet in sheets:
         folio += 1
         contents.append((sheet["plate"] or "", sheet["title"], folio))
+        body.append(book.place_plate(sheet["page"]))
         if sheet.get("pol_page") is not None:
             folio += 1
-            contents.append((sheet["pol_plate"] or "", sheet["title"] + " — political", folio))
+            contents.append((sheet["pol_plate"] or "",
+                             sheet["title"] + " — political", folio))
+            body.append(book.place_plate(sheet["pol_page"]))
+
         folio += 1
+        contents.append(("", sheet["title"] + " — a survey", folio))
+        body.append(gazetteer.text_page(sheet["title"], sheet["subtitle"], sheet["paras"],
+                                        size=size,
+                                        seed=sum(ord(c) for c in sheet["title"]) % 1000))
+
+        ents = sheet.get("entries") or []
+        if ents:
+            pages, page_of = gazetteer.entry_pages(size, sheet["title"], ents)
+            first = folio + 1
+            contents.append(("", sheet["title"] + " — gazetteer", first))
+            for name, idx in page_of.items():
+                index.setdefault(name, str(first + idx))
+            body.extend(pages)
+            folio += len(pages)
+
         num = (sheet["plate"] or "").replace("PLATE ", "") or "I"
         for lb in sheet["labels"]:
             index.setdefault(lb.text.title(), num)
-    pages.append(book.contents_page(size, contents))
 
-    for sheet in sheets:
-        pages.append(book.place_plate(sheet["page"]))
-        if sheet.get("pol_page") is not None:
-            pages.append(book.place_plate(sheet["pol_page"]))
-        pages.append(gazetteer.text_page(sheet["title"], sheet["subtitle"], sheet["paras"],
-                                         size=size,
-                                         seed=sum(ord(c) for c in sheet["title"]) % 1000))
+    pages = [book.title_page(size, "Terra Ficta", "countries that were never surveyed",
+                             roman(1800 + (seeds[0] % 99)), n_plates),
+             book.colophon_page(size, COLOPHON),
+             book.contents_page(size, contents)]
+    pages.extend(body)
 
     entries = sorted(index.items(), key=lambda kv: kv[0].lower())
     pages.extend(book.index_pages(size, entries))

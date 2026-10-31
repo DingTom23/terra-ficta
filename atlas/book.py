@@ -124,12 +124,23 @@ def contents_page(size, entries):
     decor.tracked_text(draw, (w / 2, h * 0.13), "CONTENTS", head, ink, tracking=head.size * 0.3)
     _rule(draw, h * 0.175, 0, w * 0.36, w * 0.64, ink, 1)
 
-    f = decor.font("serif", int(w * 0.015))
-    fy = decor.font("antiqua", int(w * 0.015))
-    fnum = decor.font("antiqua", int(w * 0.014))
     x0, x1 = w * 0.20, w * 0.80
-    y = h * 0.24
-    lead = int(f.size * 2.1)
+    top, bottom = h * 0.22, h * 0.92
+
+    # A contents page must hold every line it is given.  Rather than assume a
+    # row height and hope, shrink the setting until the last row clears the
+    # foot -- a table that runs off the page is worse than small type.
+    rows = max(1, len(entries))
+    size = int(w * 0.015)
+    while True:
+        f = decor.font("serif", size)
+        fy = decor.font("antiqua", size)
+        fnum = decor.font("antiqua", int(size * 0.93))
+        lead = int(size * 2.0)
+        if top + rows * lead <= bottom or size <= int(w * 0.0085):
+            break
+        size -= 1
+    y = top
 
     # The plate column is as wide as the widest plate label, measured, not
     # guessed: "PLATE III" is nearly twice the width of "PLATE I", and a fixed
