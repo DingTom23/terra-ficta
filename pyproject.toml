@@ -1,0 +1,16 @@
+[project]
+name = "atlas"
+version = "0.1.0"
+description = "A deterministic procedural cartography engine: seeds in, antique maps out."
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "Pillow>=10.0"]
+
+[project.scripts]
+atlas = "atlas.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["atlas"]
