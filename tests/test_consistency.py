@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from atlas import book, features, gazetteer
+from atlas import book, features, gazetteer, render
 from atlas.config import WorldSpec
 from atlas.labels import build_labels
 from atlas.naming import Namer
@@ -19,6 +19,16 @@ SPEC = WorldSpec(seed=7, width=700, height=480)
 
 _WORLD = None
 _LABELS = None
+_COLD = None
+COLD_SPEC = WorldSpec(seed=7, width=420, height=300, lat_top=72.0, lat_bottom=26.0)
+
+
+def _cold_world():
+    """A world with a north worth drawing ice in."""
+    global _COLD
+    if _COLD is None:
+        _COLD = build_world(COLD_SPEC)
+    return _COLD
 
 
 def _world_and_labels():
@@ -197,3 +207,39 @@ def test_every_entry_has_a_page():
     assert len(pages) >= 1
     missing = [e.head for e in ents if e.head.lower() not in page_of]
     assert not missing, f"entries with no folio: {missing}"
+
+def test_ice_lies_only_on_high_ground_or_high_latitude():
+    """Ice is a fact about height and latitude, not a decoration."""
+    from atlas.climate import snowline
+    w = _cold_world()
+    ice = w.climate["ice"]
+    lat = w.climate["latitude"]
+    h = w.height
+    assert ice.sum() > 0, "no ice anywhere in a world that has a north"
+    assert not (ice & (h <= 0)).any(), "ice was drawn on the sea as land ice"
+    too_low = ice & (h < snowline(lat)) & (lat <= 66.5)
+    assert not too_low.any(), f"{int(too_low.sum())} ice cells below the snowline"
+
+
+def test_sea_ice_lies_only_in_water():
+    w = _cold_world()
+    water = w.height <= 0
+    for key in ("fast_ice", "pack_ice"):
+        mask = w.climate[key]
+        assert not (mask & ~water).any(), f"{key} was drawn on land"
+
+
+def test_ice_takes_no_province_on_the_political_plate():
+    """A tinted province under an ice cap is a claim nobody can make."""
+    w = _cold_world()
+    ice = w.climate["ice"]
+    if not ice.any():
+        return
+    img, _h, _land = render.render_political(w, scale=1)
+    img = np.asarray(img).astype(np.float32)
+    if img.max() <= 1.5:          # the renderer works in 0..1, the sheet in 0..255
+        img = img * 255.0
+    # The ice must be paler than the warmest province wash anywhere.
+    ys, xs = np.where(ice)
+    px = img[ys, xs]
+    assert px.mean() > 200, f"ice on the political plate came out at {px.mean():.0f}"

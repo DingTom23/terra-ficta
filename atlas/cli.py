@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import html
+
+import numpy as np
 import sys
 import time
 from pathlib import Path
@@ -26,10 +28,25 @@ COLOPHON = [
 ]
 
 
+def latitude_for(seed: int) -> tuple[float, float]:
+    """Where this country lies, north edge to south edge.
+
+    Six countries all sitting between 12 and 58 degrees north would be six
+    drawings of the same place.  The span stays wide -- a country needs a
+    climate gradient to have a north and a south -- but the band moves, so one
+    country is arctic and another is Mediterranean.
+    """
+    rng = np.random.default_rng(seed + 991)
+    top = float(rng.uniform(50.0, 76.0))
+    return top, top - 46.0
+
+
 def render_sheet(seed: int, width: int = 1400, height: int = 950, scale: int = 0,
                  title: str | None = None, plate: str | None = None,
                  mode: str = "physical", verbose: bool = True):
-    spec = WorldSpec(seed=seed, width=width, height=height)
+    lat_top, lat_bottom = latitude_for(seed)
+    spec = WorldSpec(seed=seed, width=width, height=height,
+                     lat_top=lat_top, lat_bottom=lat_bottom)
     t0 = time.time()
     world = build_world(spec)
     t1 = time.time()

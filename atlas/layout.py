@@ -130,11 +130,17 @@ def main_mass(land: np.ndarray, factor: int = 4, keep: float = 0.0015):
     return (x0 * f, y0 * f, min(ww, (x1 + 1) * f), min(hh, (y1 + 1) * f))
 
 
-def choose_frame(land: np.ndarray, pad: float = 0.16) -> Frame:
+def choose_frame(land: np.ndarray, pad: float = 0.16, extra=None) -> Frame:
     """Crop the map to its land, keeping a margin of sea around it.
 
     ``pad`` is the margin as a fraction of the land's own size, so a wide
     continent keeps a wide margin and a compact one keeps a tight one.
+
+    ``extra`` is accepted and deliberately ignored.  Reaching for the pack ice
+    looked right and was wrong: ice lies across the whole northern sea, so a
+    frame that grew toward it grew to the edge of the grid and the country
+    became a detail in the middle of an ocean.  Where the land runs far enough
+    north to matter, the margin already carries the ice.
 
     The plate is *not* forced to the aspect of the terrain grid.  A continent
     that is tall gets a tall plate, the way an atlas would print it; the book

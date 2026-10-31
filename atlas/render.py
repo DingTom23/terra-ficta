@@ -104,6 +104,75 @@ def contours(elev, interval=100.0, width=0.9, index_every=5, index_width=1.7):
     return alpha, idx_alpha
 
 
+def _ice(sea_rgb, land_rgb, ice, fast, pack, shade, seed):
+    """Blend permanent ice into the ground and the sea.
+
+    Land ice keeps the hillshade: an ice sheet has relief, and a flat white cap
+    reads as a hole torn in the plate.  Sea ice is flat, but it is broken into
+    floes with water between them and a margin that wanders -- a straight edge
+    of ice is the one thing an arctic chart never shows.
+
+    Returns the two pictures and the frozen fraction of the sea, because the
+    water lining must stop at the ice: depth rings drawn across a frozen sea
+    are what turned the first attempt into a grey smudge.
+    """
+    if ice is None and fast is None:
+        return sea_rgb, land_rgb, None
+    RH, RW = sea_rgb.shape[:2]
+    ink_water = np.array(INK_WATER, dtype=np.float32)
+    cold_land = np.array([0.958, 0.964, 0.968], dtype=np.float32)
+    # Ice has to be whiter than the sea, not bluer.  The shallow sea is already
+    # a very pale grey-blue, so ice tinted to match it vanished into the water.
+    cold_sea = np.array([0.962, 0.968, 0.972], dtype=np.float32)
+    frozen = np.zeros((RH, RW), dtype=np.float32)
+
+    if ice is not None and ice.any():
+        m = np.clip(upsample(ice.astype(np.float32), RW, RH, Image.BILINEAR), 0, 1)[..., None]
+        lit = cold_land * (0.80 + 0.34 * shade)[..., None]
+        land_rgb = land_rgb * (1.0 - m) + lit * m
+        # The edge of an ice cap is a coastline.  Without a line the white area
+        # has no shape and reads as a cloud lying on the country.
+        edge = (ice & ~_morph(ice, 1, "min")).astype(np.float32)
+        e = np.clip(upsample(edge, RW, RH, Image.BILINEAR), 0.0, 1.0)
+        land_rgb = _mix(land_rgb, ink_water, e[..., None] * 0.45)
+
+    if fast is not None and (fast.any() or (pack is not None and pack.any())):
+        # Hard masks.  A bilinear edge fades the ice into the water over forty
+        # pixels, and a forty-pixel fade is fog however white it is painted.
+        fm = (np.clip(upsample(fast.astype(np.float32), RW, RH, Image.BILINEAR),
+                      0.0, 1.0) > 0.5).astype(np.float32)
+        pm = np.zeros_like(fm) if pack is None else (
+            np.clip(upsample(pack.astype(np.float32), RW, RH, Image.BILINEAR),
+                    0.0, 1.0) > 0.5).astype(np.float32)
+
+        # The sheet draws ice as a wash inside a limit, not as a field of
+        # white shapes: solid in the north, thinning toward the margin, with
+        # a scatter of separate floes where the pack is breaking up.
+        rng = np.random.default_rng(seed + 131)
+        sp = blur(rng.random((RH // 5 + 2, RW // 5 + 2)).astype(np.float32), 1.0, passes=1)
+        sp = np.clip(upsample(sp, RW, RH, Image.BILINEAR), 0.0, 1.0)
+        loose = pm * (1.0 - fm)
+        floe = (sp > float(np.quantile(sp, 0.80))).astype(np.float32) * loose
+
+        sea_rgb = sea_rgb * (1.0 - 0.90 * fm)[..., None] + cold_sea * (0.90 * fm)[..., None]
+        sea_rgb = sea_rgb * (1.0 - 0.50 * loose)[..., None] + cold_sea * (0.50 * loose)[..., None]
+        sea_rgb = sea_rgb * (1.0 - 0.95 * floe)[..., None] + cold_sea * (0.95 * floe)[..., None]
+
+        # The ice edge is a coastline of its own: draw it as a dotted rule, the
+        # same way the sheet draws a border, so it reads as a limit rather than
+        # as a change of weather.
+        er = fm.copy()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            er = er * np.roll(fm, (dy, dx), (0, 1))
+        edge = np.clip(fm - er, 0.0, 1.0)
+        comb = ((np.arange(RH)[:, None] + np.arange(RW)[None, :]) % 11) < 6
+        edge = edge * comb.astype(np.float32)
+        sea_rgb = _mix(sea_rgb, ink_water, edge[..., None] * 0.55)
+        frozen = np.clip(0.97 * fm + 0.88 * floe, 0.0, 1.0)
+
+    return sea_rgb, land_rgb, frozen
+
+
 def render_terrain(world, scale=2, z_factor=340.0, contour_interval=200.0):
     spec = world.spec
     hh, ww = world.height.shape
@@ -142,6 +211,14 @@ def render_terrain(world, scale=2, z_factor=340.0, contour_interval=200.0):
         a = (0.44 * np.exp(-np.maximum(h, 0.0) / 1700.0) * land_m)[..., None]
         land_rgb = land_rgb * (1.0 - a) + b_hi * a
 
+    # Ice is drawn as ice, not as a pale tint: the sheet says "this ground is
+    # not ground", and a colour wash cannot say that.  The hillshade stays
+    # underneath so the surface still reads as a surface.
+    climate = getattr(world, "climate", None) or {}
+    sea_rgb, land_rgb, frozen = _ice(sea_rgb, land_rgb, climate.get("ice"),
+                                     climate.get("fast_ice"), climate.get("pack_ice"),
+                                     shade, spec.seed)
+
     img = sea_rgb * (1.0 - land_m[..., None]) + land_rgb * land_m[..., None]
 
     # --- ink ------------------------------------------------------------
@@ -152,6 +229,9 @@ def render_terrain(world, scale=2, z_factor=340.0, contour_interval=200.0):
     hach = coastal_hachures(blur(np.maximum(-h, 0.0), max(1.0, 2.0 * scale), passes=2),
                             spacing=45.0, max_depth=420.0)
     hach = hach * (1.0 - land_m)
+    if frozen is not None:
+        # Depth rings drawn across a frozen sea read as grey stains on the ice.
+        hach = hach * (1.0 - frozen)
     img = _mix(img, np.array(INK_WATER, dtype=np.float32), hach * 0.50)
 
     alpha, idx = contours(np.maximum(h, 0.0), interval=contour_interval)
@@ -256,6 +336,13 @@ def render_political(world, scale=2, tint=0.55, relief=0.11):
         t_m = upsample(t, RW, RH)[..., None]
         land_rgb = base * (1.0 - t_m) + tinted * t_m
     land_rgb = land_rgb * (1.0 - relief + relief * shade)[..., None]
+
+    # Ice takes no province.  A tint over an ice cap is a claim about
+    # government that nobody can make.
+    climate = getattr(world, "climate", None) or {}
+    sea_rgb, land_rgb, _frozen = _ice(sea_rgb, land_rgb, climate.get("ice"),
+                                      climate.get("fast_ice"), climate.get("pack_ice"),
+                                      shade, spec.seed)
 
     img = sea_rgb * (1.0 - land_m[..., None]) + land_rgb * land_m[..., None]
 

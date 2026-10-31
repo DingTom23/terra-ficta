@@ -422,6 +422,62 @@ Two consequences worth keeping:
 That is the argument for writing the book at all: prose is a test suite for
 geometry.
 
+## 23. Ice has to be whiter than the sea, not bluer
+
+The first attempt tinted sea ice toward a cold blue-grey and it disappeared.
+The reason was not subtle: the shallow sea on this palette is already a pale
+blue-grey, so "a colder version of the sea" was the same colour as the sea.  Ice
+reads because it is **lighter** than everything around it — `cold_sea` had to go
+to `(0.962, 0.968, 0.972)`, near white, before the pack ice appeared at all.
+
+Two further rules came out of the same afternoon:
+
+- **Keep the hillshade under the ice.**  A flat white cap looks like a hole torn
+  in the plate.  The land ice is `cold_land * (0.80 + 0.34 * shade)`: the relief
+  still models the surface, it is only the colour that has been taken away.
+- **Stop the water lining at the ice.**  This was the real reason the first
+  attempt read as fog.  The depth rings are drawn across the whole sea, and a
+  frozen sea with a hundred depth rings under it is a grey smudge, however white
+  the ice is painted.  `_ice` now returns the frozen fraction and the lining is
+  multiplied by `1 - frozen`.  A layer that is right for water is wrong for ice.
+
+The margin of the ice is noise-warped rather than a parallel of latitude,
+because a straight edge of ice is the one thing an arctic chart never shows.
+
+Drawing the ice took three more attempts after that, and each failure is worth
+naming:
+
+- **A bilinear edge is fog.**  Upsampling the ice mask and blending it leaves a
+  forty-pixel fade between ice and water, and no amount of white paint survives
+  a forty-pixel fade.  The masks are thresholded to 0 or 1, so the edge is an
+  edge.
+- **A field of white shapes is camouflage.**  Thresholding a blurred noise field
+  into fifty per cent ice gives an even, meaningless pattern that reads as
+  dazzle paint.  Ice is a **wash inside a limit** — solid in the north, thinning
+  toward the margin, with a sparse scatter of separate floes where the pack is
+  breaking up (the top twenty per cent of the floe field, not half of it).
+- **The limit needs a line.**  The ice edge is a coastline of its own, so it is
+  drawn the way the sheet draws a border: a dotted rule, in the same comb
+  pattern.  Without it the white area has no shape.
+
+## 24. A country needs a latitude
+
+All six countries were between 12 and 58 degrees north.  They had different
+coastlines and different names and were, climatically, the same country drawn
+six times — the biome census barely changed between plates.
+
+Latitude is now drawn from the seed (`cli.latitude_for`): the span stays wide,
+because a country needs a north and a south to have a climate gradient at all,
+but the band moves.  Seed 7 sits at 68°N and has a frozen sea; seed 4 sits at
+52°N and has none.  This cost one line of code and made the book a book about
+places rather than a book about a program.
+
+It also broke the framing, briefly.  `choose_frame` crops to the land, so pack
+ice north of the coast fell outside the plate.  Letting the frame chase the ice
+made it grow to the whole grid — pack ice spans the full width of the map — and
+the country became a detail in the middle of an ocean.  The frame stays on the
+land; the margin carries the ice.
+
 ## Smaller decisions worth recording
 
 **The border is a measuring instrument.** A graduated chequer band outside the neat
@@ -477,9 +533,12 @@ than a small one, so the type is fitted to the box at draw time.
 
 ## What is still wrong
 
-- The far north has no ice cap. Latitude cools the temperature, but nothing
-  accumulates as ice, so a polar sea is drawn as open water and a polar coast is
-  drawn with the same greens as a temperate one.
+- The ice has no history.  It does not advance or retreat, no coast is drawn as
+  it would have looked in a colder century, and no iceberg is ever calved.
+- The scale is not honest.  A country measures about 7,000 km across — the size
+  of Russia — but its largest city holds four thousand people and its towns
+  stand five hundred kilometres apart.  Either the populations must rise by two
+  orders of magnitude or the countries must shrink to the size of Britain.
 - Islands are lobed by construction, which is honest but monotonous: the same
   three harmonics at every scale, and an archipelago reads as a family.
 - Soundings are scattered by a rule, not surveyed: a real chart thins them with

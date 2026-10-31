@@ -105,11 +105,22 @@ discretised on a raster with a stability clamp, converges to a staircase.
 **4. Detail.** High-frequency ridges are added *after* routing. Put in earlier,
 they shatter the network into thousands of competing puddles.
 
-**5. Names.** Each region draws from its own phonology — a distinct onset/vowel/
+**5. Climate.** Latitude is drawn from the seed, so each country sits in its own
+band — one is arctic, another Mediterranean. Temperature falls with latitude and
+height; moisture is carried in from the west, lifted over ridges and dropped in
+their rain shadow; a Whittaker classification turns the two into biomes.
+
+**6. Ice.** A snowline falls from 5,200 m in the tropics to sea level at the pole.
+Land above it is glacier; above 66.5 degrees the whole surface is a sheet. Sea ice
+is drawn from a noise-warped margin, as a wash inside a dotted limit with a sparse
+scatter of floes at the edge — because a straight edge of ice is the one thing an
+arctic chart never shows, and a field of white shapes is camouflage, not ice.
+
+**7. Names.** Each region draws from its own phonology — a distinct onset/vowel/
 coda inventory — and its own set of toponymic suffixes. Labels are placed
 greedily, measured with the font that will actually draw them.
 
-**6. The sheet.** Layers are composited in ink order, then laid onto toned paper.
+**8. The sheet.** Layers are composited in ink order, then laid onto toned paper.
 
 See [DESIGN.md](DESIGN.md) for the reasoning behind each choice, including the
 ones that turned out to be wrong.
@@ -197,8 +208,9 @@ political composition, book binding, gallery, viewer.
 
 Still wrong, and known to be wrong:
 
-- The far north has no ice cap. Latitude cools the temperature but nothing
-  actually accumulates as ice, so a polar sea is drawn as open water.
+- The far north now freezes, but the ice has no history: it does not advance or
+  retreat, and no coastline is drawn as it would have looked during the Little
+  Ice Age.
 - The index gives one folio per name. A river that runs through three plates
   is listed once.
 - Islands are lobed by construction, which is honest but monotonous: the
@@ -212,5 +224,9 @@ Still wrong, and known to be wrong:
 - The dictionary is thin. Every entry is a measurement — a rank, an elevation,
   a distance — and nothing else. There is no trade, no history, no reason for
   the town to be there. A real gazetteer entry has a *why*.
+- The scale is not honest. A country is 7,000 km across, which makes it the
+  size of Russia, but its largest city has four thousand people and its towns
+  sit five hundred kilometres apart. Either the populations must rise by two
+  orders of magnitude or the countries must shrink.
 - Nothing in the book is written by a person, including the colophon, which is
   the one place a person ought to be speaking.
