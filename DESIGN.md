@@ -211,8 +211,16 @@ than a small one, so the type is fitted to the box at draw time.
 
 - Islands are smoother than they should be: the anti-fringe blur that rescues the
   continental coastline rounds small detached landmasses into eggs.
-- River labels are placed at the river but not rotated along it.
-- Composition is fixed: the continent always sits near the centre, and the empty
-  sea to its west is not exploited for insets.
-- Soundings are scattered by a rule, not surveyed: real charts thin them out with
-  depth and line them up with the approach to a harbour.
+- Composition is fixed: the continent sits near the centre, and a continent that
+  grows westward crowds the empty sea the cartouche wanted. Nothing re-lays the
+  sheet when the land is in the way.
+- Soundings are scattered by a rule, not surveyed: a real chart thins them with
+  depth and lines them up along the approach to a harbour.
+- On a long straight slope the jittered hachures can still fall into visible
+  diagonal rows, because the jitter is bounded by the lattice spacing.
+- There is no inset map, no political hierarchy (every province is the same size
+  and the same kind), and no cultural layering — no capitals, no road hierarchy,
+  no difference between a village and a port.
+- The naming has no grammar. Names are phonotactically consistent within a
+  province, but there is no syntax: no "Great", no "of", no rivers named after
+  towns named after saints.
