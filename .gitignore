@@ -1,5 +1,5 @@
 __pycache__/
 *.pyc
 cache/
-out/*.png
-out/gallery/*.png
+out/*
+!out/atlas.pdf

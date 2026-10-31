@@ -37,8 +37,19 @@ class Label:
     h: float = 0.0
     prov: int = -1
     capital: bool = False
+    rank: int = 2
+    flip: bool = False
 
     def box(self):
+        # A town's name is set beside its dot, not centred on it.
+        # Collision-testing it as a centred box let names run under the legends.
+        if self.dot:
+            gap = self.h * 1.1
+            if self.flip:
+                return (self.x - self.w - gap, self.y - self.h / 2,
+                        self.x, self.y + self.h / 2)
+            return (self.x, self.y - self.h / 2,
+                    self.x + self.w + gap, self.y + self.h / 2)
         return (self.x - self.w / 2, self.y - self.h / 2,
                 self.x + self.w / 2, self.y + self.h / 2)
 
@@ -235,11 +246,23 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
         picked.append((x, y))
         if len(picked) >= n_towns:
             break
+
+    # Rank the sites by the score that chose them: the great towns stand where
+    # water, low ground and the sea all meet, and a plate should say so.
+    n = len(picked)
+    by_score = sorted(range(n), key=lambda i: -float(score[picked[i][1], picked[i][0]]))
+    n_city = max(1, n // 6)
+    n_market = max(n_city + 1, n // 2)
+    ranks = [2] * n
+    for pos, i in enumerate(by_score):
+        ranks[i] = 0 if pos < n_city else (1 if pos < n_market else 2)
+
     for i, (x, y) in enumerate(picked):
         culture = cultures[i % len(cultures)]
         labels.append(Label(
             text=namer.place(culture, "town", suffix=True),
             x=float(x), y=float(y), kind="town", size=15, priority=6, dot=True,
+            rank=ranks[i],
         ))
 
     # --- rivers ---------------------------------------------------------
@@ -301,6 +324,15 @@ def avoid(labels, ww, hh, obstacles=()):
             boxes.append(lb.box())
             placed.append(lb)
             continue
+        # A town name that will not fit on the right of its dot is set on the
+        # left instead -- the way an engraver would have done it, and the only
+        # way to keep towns near the frame from disappearing altogether.
+        if lb.kind == "town":
+            flipped = replace(lb, flip=not lb.flip)
+            if fits(flipped.box()):
+                boxes.append(flipped.box())
+                placed.append(flipped)
+                continue
         if lb.kind != "region":
             continue
         cx = min(max(lb.x, mx + lb.w / 2), ww - mx - lb.w / 2)

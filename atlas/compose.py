@@ -144,7 +144,8 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     else:
         img, h, land_m = render.render_terrain(view, scale=s)
         img = render.draw_hachures(img, view, scale=s)
-        img = render.draw_borders(img, prov, land, scale=s, weight=2, alpha=0.75)
+        # No political limits here: on a physical sheet they read as hatching
+        # along every ridge.  The political plate is where they belong.
         img = render.draw_lakes(img, view, scale=s)
         img = render.draw_rivers(img, view, scale=s, alpha=0.66)
         img = render.draw_coastline(img, land_m, scale=s)
@@ -216,7 +217,7 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         for lb in placed:
             if lb.kind != "region" or lb.prov < 0:
                 continue
-            best, best_d = None, 1e18
+            best, best_key = None, (9, 1e18)
             for t in placed:
                 if t.kind != "town":
                     continue
@@ -226,8 +227,9 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
                 if int(prov_grid[ty, tx]) != lb.prov:
                     continue
                 d = (t.x - lb.x) ** 2 + (t.y - lb.y) ** 2
-                if d < best_d:
-                    best, best_d = t, d
+                key = (t.rank, d)
+                if key < best_key:
+                    best, best_key = t, key
             if best is not None:
                 seats[lb.prov] = best
         for t in seats.values():
@@ -260,14 +262,24 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         face, frac, _ = STYLES[lb.kind]
         f = decor.font(face, max(10, int(frac * RW)))
         if lb.kind == "town":
+            boost = {0: 1.14, 1: 1.00, 2: 0.92}.get(lb.rank, 1.0)
+            f = decor.font("serif-bold" if lb.capital else "serif",
+                           max(10, int(frac * RW * boost)))
             if lb.capital:
-                f = decor.font("serif-bold", max(10, int(frac * RW)))
                 _star(draw, x, y, max(4.0, f.size * 0.40), ink)
                 r = f.size * 0.40
+            elif lb.rank == 1:
+                r = max(3.0, f.size * 0.21)
+                draw.ellipse([x - r, y - r, x + r, y + r], outline=ink,
+                             width=max(1, int(round(f.size * 0.07))))
+                draw.ellipse([x - r * 0.34, y - r * 0.34,
+                              x + r * 0.34, y + r * 0.34], fill=ink)
             else:
                 r = max(2, int(f.size * 0.15))
                 draw.ellipse([x - r, y - r, x + r, y + r], fill=ink)
-            decor.tracked_text(draw, (x + r * 2.4, y), lb.text, f, ink,
+            gap = max(r * 2.4, f.size * 0.52)
+            tx = x - gap - lb.w * s if lb.flip else x + gap
+            decor.tracked_text(draw, (tx, y), lb.text, f, ink,
                                anchor_center=False, stroke_width=halo,
                                stroke_fill=paper_rgb)
         elif lb.kind == "river" and abs(lb.angle) > 8:

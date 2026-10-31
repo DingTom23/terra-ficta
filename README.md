@@ -1,8 +1,13 @@
-# Atlas
+# Terra Ficta
 
 **A deterministic procedural cartography engine.** Give it a seed; it gives you a
 continent — terrain, drainage, climate, place names, and a finished sheet drawn in
 the manner of a nineteenth-century relief atlas.
+
+*Terra ficta* is what medieval mapmakers called country they had invented
+themselves. The command is `atlas`; the package is `atlas`.
+
+![A plate from the atlas](docs/plate.jpg)
 
 Nothing in the output is hand-drawn. Nothing is random in the sense of being
 irreproducible: the same seed always produces the same world, down to the last
@@ -16,6 +21,11 @@ python -m atlas --seed 7
   seed     7  terrain  21.2s  ink  21.0s  3180x2280
   -> out/atlas_0007.png
 ```
+
+The machine behind one sheet — land mask, drainage network, bare relief, and the
+finished plate:
+
+![How a plate is made](docs/pipeline.jpg)
 
 ---
 
