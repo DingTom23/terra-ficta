@@ -293,8 +293,13 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
                                stroke_width=halo, stroke_fill=paper_rgb)
         else:
             fill = ink_water if lb.kind in ("water", "river") else ink_soft
+            # A range name is the one label set over hillshade and hachures
+            # both, so it gets one extra pixel of halo -- not more: a halo
+            # wider than the letter's stem reads as a pale letter with a dark
+            # edge, which is the opposite of what a name should look like.
+            stroke = halo + 1 if lb.kind == "range" else halo
             decor.tracked_text(draw, (x, y), lb.text, f, fill,
-                               tracking=lb.tracking, stroke_width=halo,
+                               tracking=lb.tracking, stroke_width=stroke,
                                stroke_fill=paper_rgb)
 
     # --- soundings -------------------------------------------------------

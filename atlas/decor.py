@@ -53,8 +53,13 @@ def tracked_text(draw, xy, text, fnt, fill, tracking=0.0, anchor_center=True,
     if anchor_center:
         x -= total / 2.0
     for ch, w in zip(text, widths):
-        draw.text((x, y), ch, font=fnt, fill=fill, anchor="lm",
-                  stroke_width=stroke_width, stroke_fill=stroke_fill)
+        # Two passes, not one.  Pillow strokes a glyph by widening its outline
+        # on both sides, so a stroke as wide as the letter's stem eats the fill
+        # and the letter comes out hollow.  Draw the halo first, then the ink.
+        if stroke_width and stroke_fill is not None:
+            draw.text((x, y), ch, font=fnt, fill=stroke_fill, anchor="lm",
+                      stroke_width=stroke_width, stroke_fill=stroke_fill)
+        draw.text((x, y), ch, font=fnt, fill=fill, anchor="lm")
         x += w + tracking
     return total
 
@@ -72,8 +77,10 @@ def rotated_text(page, text, xy, fnt, fill, angle, stroke_width=0, stroke_fill=N
     tmp = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(tmp)
     sf = (tuple(stroke_fill) + (255,)) if stroke_fill is not None else None
-    d.text((pad, h / 2), text, font=fnt, fill=tuple(fill) + (255,), anchor="lm",
-           stroke_width=stroke_width, stroke_fill=sf)
+    if stroke_width and sf is not None:
+        d.text((pad, h / 2), text, font=fnt, fill=sf, anchor="lm",
+               stroke_width=stroke_width, stroke_fill=sf)
+    d.text((pad, h / 2), text, font=fnt, fill=tuple(fill) + (255,), anchor="lm")
     rot = tmp.rotate(angle, resample=Image.BICUBIC, expand=True)
     x, y = xy
     page.paste(rot, (int(x - rot.width / 2), int(y - rot.height / 2)), rot)

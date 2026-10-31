@@ -155,8 +155,10 @@ def render_terrain(world, scale=2, z_factor=340.0, contour_interval=200.0):
     img = _mix(img, np.array(INK_WATER, dtype=np.float32), hach * 0.50)
 
     alpha, idx = contours(np.maximum(h, 0.0), interval=contour_interval)
-    img = _mix(img, ink, alpha * 0.26 * land_m)
-    img = _mix(img, ink, idx * 0.36 * land_m)
+    # Hachures carry the form; contours only qualify it.  At equal strength
+    # the two relief systems fight and the ground reads as noise.
+    img = _mix(img, ink, alpha * 0.17 * land_m)
+    img = _mix(img, ink, idx * 0.25 * land_m)
 
     return img, h, land_m
 
