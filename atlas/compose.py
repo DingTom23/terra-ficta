@@ -122,11 +122,15 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     prov = getattr(view, "provinces", None)
     if mode == "political":
         img, h, land_m = render.render_political(view, scale=s)
+        # A whisper of hachure under the wash.  Without it the provinces read
+        # as flat polygons laid on a drawing; with it the country looks
+        # engraved first and coloured afterwards, which is the right order.
+        img = render.draw_hachures(img, view, scale=s, alpha=0.15)
         img = render.draw_lakes(img, view, scale=s, colour=(0.42, 0.56, 0.64), alpha=0.30)
         img = render.draw_rivers(img, view, scale=s, alpha=0.55)
         img = render.draw_coastline(img, land_m, scale=s, strength=1.0)
-        img = render.draw_borders(img, prov, land, scale=s, weight=2, alpha=0.85,
-                                  dash=0, colour=(0.26, 0.20, 0.17))
+        img = render.draw_borders(img, prov, land, scale=s, weight=1, alpha=0.52,
+                                  dash=0, colour=(0.40, 0.28, 0.22))
     else:
         img, h, land_m = render.render_terrain(view, scale=s)
         img = render.draw_hachures(img, view, scale=s)

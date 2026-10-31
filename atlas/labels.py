@@ -15,7 +15,7 @@ human, and a human only notices the labels that collide.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -128,7 +128,13 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
                     -((xs - px) ** 2 + (ys - py) ** 2) / (2.0 * spread))
             i = int(np.argmax(score))
             if inland[int(ys[i]), int(xs[i])] < 0.10:
-                continue
+                # A province must have a name even when it is a coastal strip.
+                # Leaving it out paints a coloured area that appears in neither
+                # the map nor the key, which reads as a mistake.  Take the
+                # deepest point it has, and only give up on a true sliver.
+                i = int(np.argmax(inland[ys, xs]))
+                if inland[int(ys[i]), int(xs[i])] < 0.02:
+                    continue
             taken.append((float(xs[i]), float(ys[i])))
             culture = cultures[len(taken) % len(cultures)]
             labels.append(Label(
@@ -272,18 +278,43 @@ def avoid(labels, ww, hh, obstacles=()):
     Boxes must already be in map-cell coordinates and measured with the font
     that will actually draw them -- an estimate that disagrees with the type
     is how labels end up on top of each other.
+
+    A region name is treated as compulsory.  A province whose name falls off
+    the edge or lands on a town used to lose its label outright, which paints a
+    coloured area that appears in neither the map nor the key -- the reader
+    takes that for a mistake, and rightly.  So a region name is first clamped
+    inside the margin, then nudged around the collision, and only a province
+    with nowhere at all to write keeps silent.
     """
+    mx, my = ww * 0.012, hh * 0.012
     placed = []
     boxes = list(obstacles)
+
+    def fits(b):
+        if b[0] < mx or b[2] > ww - mx or b[1] < my or b[3] > hh - my:
+            return False
+        return not any(_overlap(b, o) for o in boxes)
+
     for lb in labels:
-        x0, y0, x1, y1 = lb.box()
-        if x0 < ww * 0.012 or x1 > ww * 0.988 or y0 < hh * 0.012 or y1 > hh * 0.988:
+        if fits(lb.box()):
+            boxes.append(lb.box())
+            placed.append(lb)
             continue
-        b = lb.box()
-        if any(_overlap(b, o) for o in boxes):
+        if lb.kind != "region":
             continue
-        boxes.append(b)
-        placed.append(lb)
+        cx = min(max(lb.x, mx + lb.w / 2), ww - mx - lb.w / 2)
+        cy = min(max(lb.y, my + lb.h / 2), hh - my - lb.h / 2)
+        tries = [replace(lb, x=cx, y=cy)]
+        for dx, dy in ((-0.30, 0.0), (0.30, 0.0), (0.0, -0.55), (0.0, 0.55),
+                       (-0.30, -0.55), (0.30, 0.55), (-0.30, 0.55), (0.30, -0.55),
+                       (0.0, -1.05), (0.0, 1.05)):
+            tries.append(replace(lb, x=cx + dx * lb.w, y=cy + dy * lb.h))
+        for cand in tries:
+            cb = cand.box()
+            if fits(cb):
+                boxes.append(cb)
+                placed.append(cand)
+                break
     return placed
 
 

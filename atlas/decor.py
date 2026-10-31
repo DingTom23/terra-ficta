@@ -92,7 +92,7 @@ def draw_frame(draw, box, margin, ink, paper, lat_top=0.0, lat_bottom=0.0,
     # A full-contrast zebra pulls the eye off the map.  The blocks are printed
     # in ink let down toward the paper, the way a graduated border actually
     # looks on a plate that has been pulled twice.
-    block = tuple(int(round(i * 0.80 + p * 0.20)) for i, p in zip(ink, paper))
+    block = tuple(int(round(i * 0.68 + p * 0.32)) for i, p in zip(ink, paper))
     bw = max(3, int(round(margin * 0.15)))
     thin = margin * 0.42
     thick = margin * 0.56

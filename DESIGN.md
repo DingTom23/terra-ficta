@@ -275,6 +275,23 @@ A faint line is not a washed-out line. It is a line drawn at low opacity over
 whatever is underneath, which means an alpha channel and a composite, not
 arithmetic on the colour.
 
+## 17. A political plate must not show depth
+
+The political sheet reuses the same sea as the physical one, and it looked wrong
+in a way that took three attempts to name. The shallow end of the bathymetric
+ramp is nearly paper, so a broad continental shelf printed as a soft pale cloud
+round every headland — fog lying on the water. Flooring the depth made the shelf
+one tone but left a smooth gradient across it, which the eye still read as haze.
+Removing the depth rings helped and did not fix it.
+
+What fixed it was giving up the premise. A political sheet is about areas, and
+depth is an area that does not matter: the sea is now a single flat wash, with
+the abyss beyond the shelf break allowed to darken and nothing else. The coastal
+hachures came off at the same time — on a flat sea they read as dirt on the
+paper. Two layers that earn their place on the physical plate are pure noise on
+the political one, and the plate only became legible when they were removed
+rather than tuned.
+
 ---
 
 ## Smaller decisions worth recording

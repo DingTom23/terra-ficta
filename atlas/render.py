@@ -213,7 +213,14 @@ def render_political(world, scale=2, tint=0.55, relief=0.11):
     land_m = upsample((world.height > 0).astype(np.float32), RW, RH, Image.BILINEAR)
     land_m = np.clip(land_m, 0.0, 1.0)
 
-    sea_rgb = bathymetric(np.maximum(-h, 0.0))
+    # A political sheet wants areas, not depths.  Any tonal gradient over a
+    # broad shelf reads as fog lying on the water, so the sea is one flat
+    # wash and only the abyss beyond the shelf is allowed to darken.
+    _d = blur(np.maximum(-h, 0.0), max(2.0, 4.0 * scale), passes=2)
+    _deep = np.clip((_d - 900.0) / 2000.0, 0.0, 1.0)[..., None]
+    _flat = np.array([0.842, 0.866, 0.872], dtype=np.float32)
+    _abyss = np.array([0.664, 0.754, 0.802], dtype=np.float32)
+    sea_rgb = _flat * (1.0 - _deep) + _abyss * _deep
 
     base = np.array(PAPER, dtype=np.float32)
     land_rgb = np.ones((RH, RW, 3), dtype=np.float32) * base
@@ -229,15 +236,28 @@ def render_political(world, scale=2, tint=0.55, relief=0.11):
         # middle of a province, so they take a neutral land tone instead.
         flat[prov < 0] = np.array([0.780, 0.762, 0.700], dtype=np.float32)
         tinted = upsample_rgb(flat, RW, RH)
-        land_rgb = land_rgb * (1.0 - tint) + tinted * tint
+
+        # Period political maps colour a band inside each border and let it
+        # fade inward.  A wash that runs flat to the line reads as a modern
+        # diagram; the band is what makes the divisions look engraved.
+        edge = np.zeros((hh, ww), dtype=bool)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nb = np.roll(np.roll(prov, dy, 0), dx, 1)
+            edge |= (nb != prov) & (prov >= 0) & (nb >= 0)
+        band = np.zeros((hh, ww), dtype=np.float32)
+        cur = edge
+        for i in range(8):
+            band = np.maximum(band, cur.astype(np.float32) * (1.0 - 0.145 * i))
+            cur = _morph(cur, 1, "max")
+        band *= (world.height > 0)
+        t = np.clip(tint * (1.0 + 1.30 * band), 0.0, 0.95)
+        t_m = upsample(t, RW, RH)[..., None]
+        land_rgb = base * (1.0 - t_m) + tinted * t_m
     land_rgb = land_rgb * (1.0 - relief + relief * shade)[..., None]
 
     img = sea_rgb * (1.0 - land_m[..., None]) + land_rgb * land_m[..., None]
 
-    hach = coastal_hachures(blur(np.maximum(-h, 0.0), max(1.0, 2.0 * scale), passes=2),
-                            spacing=45.0, max_depth=420.0)
-    hach = hach * (1.0 - land_m)
-    img = _mix(img, np.array(INK_WATER, dtype=np.float32), hach * 0.50)
+    # No depth rings: on a political sheet they read as dirt on the paper.
     return img, h, land_m
 
 

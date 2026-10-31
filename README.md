@@ -167,5 +167,8 @@ Still wrong, and known to be wrong:
   harmonic sum is the same shape at every scale.
 - Nothing distinguishes a capital from a village except the label; a political
   plate wants symbols of rank, and does not have them.
+- Region names are now compulsory, but on about one seed in six a province
+  still finds nowhere to write: it is then tinted on the plate and missing from
+  the key, which is the one inconsistency a reader will actually notice.
 - The gazetteer is generated from the same statistics that drew the map, so it
   can describe a country accurately and still tell you nothing about it.
