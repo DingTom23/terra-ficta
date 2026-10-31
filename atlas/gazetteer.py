@@ -254,7 +254,7 @@ def _town_entry(t, prov_name):
 
 
 def _river_entry(r, towns=()):
-    rise = f"rises at {_m(r.source_m)} m"
+    rise = f"a river rising at {_m(r.source_m)} m"
     if r.range_name:
         rise += f" in the {r.range_name.title()}"
     if r.mouth_sea:
@@ -263,8 +263,8 @@ def _river_entry(r, towns=()):
         where = "the sea"
     else:
         where = "the marshes"
-    text = (f"{rise} and runs {_km(r.length_km, 1)} km {r.flow} to {where}, "
-            f"draining {_count(r.drained_km2)} square kilometres.")
+    text = (f"{rise}, running {_km(r.length_km, 1)} km {r.flow} to {where}, "
+            f"and draining {_count(r.drained_km2)} square kilometres.")
     if len(towns) == 1:
         text += f" {towns[0].title()} stands upon it."
     elif len(towns) > 1:
@@ -273,7 +273,7 @@ def _river_entry(r, towns=()):
 
 
 def _range_entry(r):
-    text = f"run {_km(r.extent_km, 0)} km through {r.provinces or 'the interior'}"
+    text = f"a range running {_km(r.extent_km, 0)} km through {r.provinces or 'the interior'}"
     text += f"; the highest point is {_m(r.high_m, 0)} m"
     if r.holds_peak:
         text += ", the highest in the country"
@@ -282,7 +282,7 @@ def _range_entry(r):
 
 def _province_entry(p):
     plural = "town" if p.towns == 1 else "towns"
-    text = f"{_count(p.area_km2)} square kilometres, {p.towns} {plural}"
+    text = f"a province of {_count(p.area_km2)} square kilometres, {p.towns} {plural}"
     if p.seat:
         text += f", the seat at {p.seat.title()}"
     text += "."
@@ -294,7 +294,7 @@ def _province_entry(p):
 
 
 def _sea_entry(s):
-    text = f"washes the {s.shore} shore"
+    text = f"a sea washing the {s.shore} shore"
     if s.rivers == 1:
         text += "; one of the rivers shown reaches it"
     elif s.rivers > 1:
@@ -390,35 +390,10 @@ def entry_pages(size, head, entries_list, per_page=None):
         lines, hw = _run_in(probe, e.head.upper(), e.text, fh, fb, col_w, indent)
         blocks.append((e, lines, hw))
 
-    pages, page_of = [], {}
-    col, y = 0, top
-    page = None
-    draw = None
+    heights = [len(lines) * lead + gap for _, lines, _ in blocks]
+    col_h = bottom - top
 
-    def new_page():
-        nonlocal page, draw, y, col
-        page = Image.new("RGB", size, paper)
-        draw = ImageDraw.Draw(page)
-        # running head
-        draw.text((margin, int(h * 0.088)), "GAZETTEER", font=fsm, fill=soft)
-        tw = draw.textlength(head.upper(), font=fsm)
-        draw.text((w - margin - tw, int(h * 0.088)), head.upper(), font=fsm, fill=soft)
-        rule = int(h * 0.100)
-        draw.line([(margin, rule), (w - margin, rule)], fill=soft, width=1)
-        pages.append(page)
-        col, y = 0, top
-
-    new_page()
-    for e, lines, hw in blocks:
-        need = len(lines) * lead + gap
-        if y + need > bottom:
-            if col == 0:
-                col = 1
-                y = top
-            else:
-                new_page()
-        x = margin + col * (col_w + gutter)
-        # first line: head, em rule, first slice of text
+    def draw_block(draw, x, y, e, lines, hw):
         draw.text((x, y), e.head.upper(), font=fh, fill=ink)
         hwid = draw.textlength(e.head.upper(), font=fh)
         draw.text((x + hwid, y), " \u2014 ", font=fb, fill=ink)
@@ -431,11 +406,53 @@ def entry_pages(size, head, entries_list, per_page=None):
         for line in rest:
             draw.text((x + indent, yy), line, font=fb, fill=ink)
             yy += lead
-        y += need
-        page_of.setdefault(e.head.lower(), len(pages) - 1)
+
+    pages, page_of = [], {}
+    i = 0
+    while i < len(blocks):
+        # Everything that fits on this page, both columns together.
+        j, used = i, 0.0
+        while j < len(blocks) and used + heights[j] <= 2 * col_h:
+            used += heights[j]
+            j += 1
+        if j == i:                      # a single entry taller than a page
+            j = i + 1
+        chunk = list(range(i, j))
+
+        # Cut the chunk where the two columns come out closest in height: a
+        # dictionary page whose right column stops halfway looks like a page
+        # that ran out of words rather than a page that ended.
+        total = sum(heights[k] for k in chunk)
+        acc, cut = 0.0, len(chunk)
+        for n, k in enumerate(chunk):
+            if acc + heights[k] * 0.5 >= total * 0.5:
+                cut = n + 1
+                break
+            acc += heights[k]
+        while cut > 1 and sum(heights[k] for k in chunk[:cut]) > col_h:
+            cut -= 1
+
+        page = Image.new("RGB", size, paper)
+        draw = ImageDraw.Draw(page)
+        draw.text((margin, int(h * 0.088)), "GAZETTEER", font=fsm, fill=soft)
+        tw = draw.textlength(head.upper(), font=fsm)
+        draw.text((w - margin - tw, int(h * 0.088)), head.upper(), font=fsm, fill=soft)
+        rule = int(h * 0.100)
+        draw.line([(margin, rule), (w - margin, rule)], fill=soft, width=1)
+
+        for col, part in ((0, chunk[:cut]), (1, chunk[cut:])):
+            x = margin + col * (col_w + gutter)
+            y = top
+            for k in part:
+                e, lines, hw = blocks[k]
+                draw_block(draw, x, y, e, lines, hw)
+                y += heights[k]
+                page_of.setdefault(e.head.lower(), len(pages))
+        pages.append(page)
+        i = j
 
     # folios
-    for i, pg in enumerate(pages):
+    for n, pg in enumerate(pages):
         d = ImageDraw.Draw(pg)
-        d.text((w / 2, int(h * 0.935)), str(i + 1), font=fsm, fill=soft, anchor="mm")
+        d.text((w / 2, int(h * 0.945)), str(n + 1), font=fsm, fill=soft, anchor="mm")
     return pages, page_of
