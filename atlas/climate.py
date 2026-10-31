@@ -93,7 +93,7 @@ def ice_cover(spec: WorldSpec, lat, height):
     return glacier | sheet
 
 
-def sea_ice(spec: WorldSpec, lat, height, edge_lat=67.0, wobble=3.4, band=2.4):
+def sea_ice(spec: WorldSpec, lat, height, edge_lat=67.0, wobble=2.6, band=2.6):
     """Pack ice and fast ice, with a margin that wanders along the coast.
 
     Returns (fast, pack).  The margin is drawn from noise rather than a
@@ -102,9 +102,13 @@ def sea_ice(spec: WorldSpec, lat, height, edge_lat=67.0, wobble=3.4, band=2.4):
     """
     hh, ww = height.shape
     xs = np.linspace(0.0, 1.0, ww)
-    w = fbm(spec.seed + 71, octaves=3)(xs * 3.0, np.full(ww, 0.37), freq=4.0, gain=0.5)
+    # Two octaves at a low frequency: an ice margin meanders in great slow
+    # embayments.  Three octaves at four cycles per map drew a mountain profile.
+    w = fbm(spec.seed + 71, octaves=2)(xs * 1.1, np.full(ww, 0.37), freq=2.0, gain=0.45)
     w = np.asarray(w, dtype=np.float64).ravel()[:ww]
-    w = (w - w.mean()) / (np.abs(w).max() + 1e-9)
+    # Normalise by the spread, not by the extreme: dividing by the maximum
+    # turned one outlier into a range of jagged peaks along the ice edge.
+    w = np.clip((w - w.mean()) / (2.2 * (w.std() + 1e-9)), -1.0, 1.0)
     edge = edge_lat + wobble * w
     edge2 = edge[None, :] - band
     water = height <= 0

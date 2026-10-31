@@ -460,6 +460,13 @@ naming:
   drawn the way the sheet draws a border: a dotted rule, in the same comb
   pattern.  Without it the white area has no shape.
 
+The margin itself took two more tries.  A three-octave noise field at four
+cycles per map, normalised by its maximum, produced a line with sharp triangular
+peaks — a mountain profile, not an ice edge.  What works is **two octaves at a
+low frequency**, normalised by the field's *spread* rather than its extreme, so
+the margin meanders in a few great slow embayments.  An ice margin is the
+smoothest line on an arctic chart; it is the coast that is jagged.
+
 ## 24. A country needs a latitude
 
 All six countries were between 12 and 58 degrees north.  They had different

@@ -149,22 +149,23 @@ def _ice(sea_rgb, land_rgb, ice, fast, pack, shade, seed):
         # white shapes: solid in the north, thinning toward the margin, with
         # a scatter of separate floes where the pack is breaking up.
         rng = np.random.default_rng(seed + 131)
-        sp = blur(rng.random((RH // 5 + 2, RW // 5 + 2)).astype(np.float32), 1.0, passes=1)
+        sp = blur(rng.random((RH // 9 + 2, RW // 9 + 2)).astype(np.float32), 1.0, passes=1)
         sp = np.clip(upsample(sp, RW, RH, Image.BILINEAR), 0.0, 1.0)
         loose = pm * (1.0 - fm)
-        floe = (sp > float(np.quantile(sp, 0.80))).astype(np.float32) * loose
+        floe = (sp > float(np.quantile(sp, 0.90))).astype(np.float32) * loose
 
         sea_rgb = sea_rgb * (1.0 - 0.90 * fm)[..., None] + cold_sea * (0.90 * fm)[..., None]
         sea_rgb = sea_rgb * (1.0 - 0.50 * loose)[..., None] + cold_sea * (0.50 * loose)[..., None]
-        sea_rgb = sea_rgb * (1.0 - 0.95 * floe)[..., None] + cold_sea * (0.95 * floe)[..., None]
+        sea_rgb = sea_rgb * (1.0 - 0.85 * floe)[..., None] + cold_sea * (0.85 * floe)[..., None]
 
         # The ice edge is a coastline of its own: draw it as a dotted rule, the
         # same way the sheet draws a border, so it reads as a limit rather than
         # as a change of weather.
-        er = fm.copy()
+        total = np.clip(fm + pm, 0.0, 1.0)
+        er = total.copy()
         for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            er = er * np.roll(fm, (dy, dx), (0, 1))
-        edge = np.clip(fm - er, 0.0, 1.0)
+            er = er * np.roll(total, (dy, dx), (0, 1))
+        edge = np.clip(total - er, 0.0, 1.0)
         comb = ((np.arange(RH)[:, None] + np.arange(RW)[None, :]) % 11) < 6
         edge = edge * comb.astype(np.float32)
         sea_rgb = _mix(sea_rgb, ink_water, edge[..., None] * 0.55)
