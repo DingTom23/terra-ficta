@@ -119,6 +119,42 @@ The tell was in the biome census, not the picture. A rendered map with the wrong
 climate still looks like a map; a histogram with no desert in a continent that
 size does not.
 
+## 9. A province needs a boundary that means something
+
+The first version placed region names by k-means on land cells. That gives
+labels, but no borders — and a border drawn as the outline of a k-means cluster
+is a border with no reason behind it.
+
+The cheapest meaningful boundary was already in the data: the drainage divide.
+Every cell's terminal river mouth is found by pointer-jumping down the D8
+receiver graph (`p = p[p]`, twenty-four times, which resolves any forest shallower
+than sixteen million cells). River mouths are then clustered geographically,
+weighted by how much land they drain, and each basin joins the province of its
+mouth. Borders fall along ridges, which is where people have always put them.
+
+One consequence had to be suppressed: a province whose mouth cluster hugs the
+coast produces a border that runs along the shore, and two lines a few pixels
+apart read as a smudged coastline rather than as a border. Boundaries within
+three cells of water are dropped.
+
+## 10. Roads are not lines between towns
+
+A straight line between two towns is a diagram. A road is the cheapest way over
+the ground, which means it follows valleys and refuses slopes. So the network is
+built in two steps: Prim's algorithm on Euclidean distance decides *which* towns
+connect, and A\* over a terrain cost field (`1 + (elevation/450)^1.4 + slope/35`)
+decides *where* the road goes.
+
+The cost field is computed at a third of the terrain resolution — 42 000 cells
+instead of 1.4 million — which makes seven A\* searches take ninety milliseconds
+instead of minutes, and the resulting path is smoothed so it does not stair-step.
+
+The first attempt silently produced two roads out of seven. A town at a headland
+lands, once downsampled by three, in a cell that is mostly water; the cell was
+marked impassable and A\* returned `None`. The fix is to snap each endpoint to
+the nearest passable cell — and to make coastal cells passable at 35% land
+rather than 50%.
+
 ---
 
 ## Smaller decisions worth recording

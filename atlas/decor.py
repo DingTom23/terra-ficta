@@ -59,6 +59,26 @@ def tracked_text(draw, xy, text, fnt, fill, tracking=0.0, anchor_center=True,
     return total
 
 
+def rotated_text(page, text, xy, fnt, fill, angle, stroke_width=0, stroke_fill=None):
+    """Draw text at an angle -- for names that follow a river or a ridge.
+
+    PIL cannot rotate a glyph run in place, so the run is set on a transparent
+    patch, rotated, and pasted back.  At the supersampled sizes this engine
+    works at, the resampling is invisible.
+    """
+    pad = 6 + stroke_width * 2
+    w = int(fnt.getlength(text)) + pad * 2
+    h = int(fnt.size * 1.6) + pad * 2
+    tmp = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tmp)
+    sf = (tuple(stroke_fill) + (255,)) if stroke_fill is not None else None
+    d.text((pad, h / 2), text, font=fnt, fill=tuple(fill) + (255,), anchor="lm",
+           stroke_width=stroke_width, stroke_fill=sf)
+    rot = tmp.rotate(angle, resample=Image.BICUBIC, expand=True)
+    x, y = xy
+    page.paste(rot, (int(x - rot.width / 2), int(y - rot.height / 2)), rot)
+
+
 def draw_frame(draw, box, margin, ink, paper):
     """Double neat line, with the band between them reserved for degrees."""
     x0, y0, x1, y1 = box

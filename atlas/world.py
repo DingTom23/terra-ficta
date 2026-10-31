@@ -20,7 +20,7 @@ import numpy as np
 
 from .config import WorldSpec
 from .terrain import build_base, add_detail
-from . import climate, hydro
+from . import climate, hydro, regions
 
 CACHE_DIR = Path(__file__).resolve().parents[1] / "cache"
 
@@ -32,6 +32,7 @@ class World:
     meta: dict
     drainage: dict
     climate: dict = field(default_factory=dict)
+    provinces: np.ndarray | None = None
     extra: dict = field(default_factory=dict)
 
     @property
@@ -84,9 +85,11 @@ def build_world(spec: WorldSpec, use_cache: bool = True) -> World:
             lake = z["lake_depth"]
             rec = z["receivers"]
             relief = z["relief"] if "relief" in z else None
+            prov = z["provinces"] if "provinces" in z else None
         meta = {"relief": relief} if relief is not None else {}
         drainage = {"accumulation": acc, "lake_depth": lake, "receivers": rec}
         world = World(spec, height, meta, drainage)
+        world.provinces = prov
         world.climate = climate.derive(world)
         return world
 
@@ -98,6 +101,7 @@ def build_world(spec: WorldSpec, use_cache: bool = True) -> World:
     height = add_detail(spec, carved).astype(np.float32)
 
     dr = hydro.drainage(height)
+    prov, _mouths = regions.provinces(height, dr["receivers"], k=spec.provinces, seed=spec.seed)
 
     if use_cache:
         np.savez_compressed(
@@ -107,8 +111,10 @@ def build_world(spec: WorldSpec, use_cache: bool = True) -> World:
             lake_depth=dr["lake_depth"].astype(np.float32),
             receivers=dr["receivers"],
             relief=meta["relief"],
+            provinces=prov,
         )
 
     world = World(spec, height, meta, dr)
+    world.provinces = prov
     world.climate = climate.derive(world)
     return world

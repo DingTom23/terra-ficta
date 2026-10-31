@@ -14,6 +14,7 @@ human, and a human only notices the labels that collide.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -66,8 +67,30 @@ def _snap(ys, xs, mask, weights):
     return float(xs[i]), float(ys[i])
 
 
+def _river_angle(rec, x, y, ww, steps=12):
+    """Direction of flow at a point, in degrees counter-clockwise (PIL's sense)."""
+    idx = int(y) * ww + int(x)
+    pts = []
+    for _ in range(steps):
+        r = rec[idx]
+        if r < 0:
+            break
+        pts.append(divmod(int(r), ww))
+        idx = int(r)
+    if len(pts) < 3:
+        return 0.0
+    y0, x0 = pts[0]
+    y1, x1 = pts[-1]
+    ang = math.degrees(math.atan2(-(y1 - y0), (x1 - x0)))
+    if ang > 90.0:
+        ang -= 180.0
+    elif ang < -90.0:
+        ang += 180.0
+    return ang
+
+
 def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
-                 n_towns=8, n_rivers=2, width=None, height=None):
+                 n_towns=12, n_rivers=2, width=None, height=None):
     """Return a priority-ordered list of labels in map-cell coordinates."""
     h = world.height
     hh, ww = h.shape
@@ -81,8 +104,26 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
     labels: list[Label] = []
 
     # --- regions --------------------------------------------------------
-    ys, xs = np.where(land)
-    if len(ys) > n_regions:
+    prov = getattr(world, "provinces", None)
+    if prov is not None:
+        for j in [int(p) for p in np.unique(prov) if p >= 0]:
+            ys, xs = np.where(prov == j)
+            if len(ys) < 500:
+                continue
+            cx, cy = float(xs.mean()), float(ys.mean())
+            # The label wants the middle of the province, but the middle is
+            # often a lake or a marsh: weight by depth inland and by proximity
+            # to the centroid, and take the best cell of both.
+            d2 = (xs - cx) ** 2 + (ys - cy) ** 2
+            score = inland[ys, xs] - 2.0e-5 * d2
+            i = int(np.argmax(score))
+            culture = cultures[j % len(cultures)]
+            labels.append(Label(
+                text=namer.place(culture, "region").upper(),
+                x=float(xs[i]), y=float(ys[i]), kind="region", size=30,
+                tracking=5.0, priority=3,
+            ))
+    elif len(ys) > n_regions:
         pts = np.stack([xs, ys], 1).astype(np.float64)
         cent, lab = _kmeans(pts, n_regions, rng)
         for j in range(n_regions):
@@ -200,7 +241,9 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
             labels.append(Label(
                 text=namer.place(culture, "river", suffix=False),
                 x=spot[0], y=spot[1], kind="river", size=15,
-                tracking=1.5, angle=72.0, priority=5,
+                tracking=1.5,
+                angle=_river_angle(rec.ravel(), spot[0], spot[1], ww),
+                priority=5,
             ))
 
     for lb in labels:
@@ -244,7 +287,7 @@ def _dilate(mask, r):
     return a
 
 
-def _overlap(a, b, pad=6.0):
+def _overlap(a, b, pad=4.0):
     """True if two boxes overlap once each is grown by `pad` map cells.
 
     The padding has to be applied to the edges, not multiplied into the

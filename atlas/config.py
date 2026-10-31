@@ -49,6 +49,7 @@ class WorldSpec:
     projection: str = "equirectangular"
     style: str = "antique"
     title: str = ""
+    provinces: int = 5         # number of provinces (drawn as watershed borders)
 
     extra: dict = field(default_factory=dict)
 

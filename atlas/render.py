@@ -245,6 +245,68 @@ def finish_paper(img, world, scale=2, paper_tone=1.0):
     return np.clip(img, 0.0, 1.0)
 
 
+def draw_borders(img, region, land, scale=2, colour=(0.46, 0.30, 0.24), alpha=0.62,
+                 dash=3, gap=3, weight=1):
+    """Provincial boundaries, drawn as a dotted rule along the watershed.
+
+    A raster boundary cannot be stroked with a real dash pattern without
+    tracing it, so the line is modulated by a diagonal comb instead: on any
+    boundary the comb crosses it repeatedly and leaves evenly spaced dots.
+    """
+    if region is None:
+        return img
+    b = np.zeros(region.shape, dtype=bool)
+    for dy, dx in ((0, 1), (1, 0)):
+        shifted = np.roll(region, (-dy, -dx), axis=(0, 1))
+        b |= (region != shifted) & land & (region >= 0) & (shifted >= 0)
+
+    for _ in range(weight):
+        grown = b.copy()
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            grown |= np.roll(np.roll(b, dy, 0), dx, 1)
+        b = grown
+
+    # A border that runs along the shore is redundant with the coastline and
+    # reads as a second, smudged coast.  Keep boundaries inland.
+    near = ~land
+    for _ in range(3):
+        grown = near.copy()
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            grown |= np.roll(np.roll(near, dy, 0), dx, 1)
+        near = grown
+    b = b & ~near
+
+    hh, ww = b.shape
+    RH, RW = hh * scale, ww * scale
+    m = upsample(b.astype(np.float32), RW, RH, Image.BILINEAR)
+    m = np.clip(m * 1.4, 0.0, 1.0)
+
+    ys, xs = np.mgrid[0:RH, 0:RW]
+    comb = ((xs + ys) % (dash + gap)) < dash
+    m = m * comb
+
+    c = np.array(colour, dtype=np.float32)
+    return _mix(img, c, m[..., None] * alpha)
+
+
+def draw_roads(img, roads, scale=2, colour=(0.40, 0.27, 0.18), alpha=0.78, width=1.6):
+    """Roads: a thin warm line, lighter than a river and never straight."""
+    if not roads:
+        return img
+    RH, RW = img.shape[0], img.shape[1]
+    mask = Image.new("L", (RW, RH), 0)
+    d = ImageDraw.Draw(mask)
+    for path in roads:
+        if len(path) < 2:
+            continue
+        pts = [(x * scale, y * scale) for x, y in path]
+        d.line(pts, fill=255, width=max(1, int(round(width * scale))),
+               joint="curve")
+    a = np.asarray(mask, dtype=np.float32)[..., None] / 255.0
+    c = np.array(colour, dtype=np.float32)
+    return _mix(img, c, a * alpha)
+
+
 def render(world, scale=2, paper_tone=1.0):
     img, h, land_m = render_terrain(world, scale=scale)
     img = draw_lakes(img, world, scale=scale)

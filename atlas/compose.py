@@ -1,4 +1,4 @@
-"""Assembling the sheet: relief, frame, grid, names, and title."""
+"""Assembling the sheet: relief, borders, roads, grid, names, and title."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import math
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import decor, render
+from . import decor, render, roads as roadmod
 from .labels import build_labels, avoid
 from .naming import Namer, roman
 from .climate import BIOMES
@@ -27,17 +27,11 @@ STYLES = {
 
 
 def _sea_spots(land, blocks=30, count=4, separation=0.34, threshold=0.35):
-    """Open water, in map-normalised coordinates, most open first.
-
-    "Open" means far from any land *and* far from the edge of the sheet: a
-    cartouche dropped into a bay reads as a mistake, and one touching the
-    frame reads as a printing error.
-    """
+    """Open water, in map-normalised coordinates, most open first."""
     hh, ww = land.shape
     bh, bw = max(1, hh // blocks), max(1, ww // blocks)
     frac = land[: bh * blocks, : bw * blocks].reshape(blocks, bh, blocks, bw).mean(axis=(1, 3))
 
-    # Distance to the nearest land block, in blocks (4-connected BFS).
     big = 1e9
     dist = np.where(frac > 0.10, 0.0, big)
     ys, xs = np.mgrid[0:blocks, 0:blocks]
@@ -64,19 +58,43 @@ def _sea_spots(land, blocks=30, count=4, separation=0.34, threshold=0.35):
     return spots
 
 
+def _soundings(depth, count=24, rng=None):
+    """Depth figures in the sea: the oldest way to make water look measured."""
+    rng = rng or np.random.default_rng(0)
+    hh, ww = depth.shape
+    ys, xs = np.where((depth > 20) & (depth < 340))
+    if len(ys) == 0:
+        return []
+    pick = rng.choice(len(ys), size=min(count * 8, len(ys)), replace=False)
+    out = []
+    min_d = (min(hh, ww) * 0.075) ** 2
+    for i in pick:
+        y, x = int(ys[i]), int(xs[i])
+        if any((x - px) ** 2 + (y - py) ** 2 < min_d for px, py, _ in out):
+            continue
+        out.append((x, y, int(depth[y, x])))
+        if len(out) >= count:
+            break
+    return out
+
+
 def _measure(draw, text, fnt, tracking):
     w = sum(draw.textlength(ch, font=fnt) for ch in text) + tracking * max(0, len(text) - 1)
     return w, fnt.size * 1.35
 
 
-def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle=None):
-    """Render one world onto a finished sheet.  Returns a PIL image."""
+def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle=None,
+            plate=None):
+    """Render one world onto a finished sheet.  Returns (page, placed labels)."""
     spec = world.spec
+    land = world.height > 0
+
     img, h, land_m = render.render_terrain(world, scale=scale)
+    img = render.draw_borders(img, getattr(world, "provinces", None), land,
+                              scale=scale, weight=2, alpha=0.75)
     img = render.draw_lakes(img, world, scale=scale)
     img = render.draw_rivers(img, world, scale=scale)
     img = render.draw_coastline(img, land_m, scale=scale)
-    img = render.finish_paper(img, world, scale=scale)
 
     hh, ww = world.height.shape
     RW, RH = ww * scale, hh * scale
@@ -85,9 +103,6 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
 
     page = Image.new("RGB", (PW, PH), tuple(int(c * 255) for c in PAPER))
     draw = ImageDraw.Draw(page)
-
-    map_img = Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8))
-    page.paste(map_img, (M, M))
 
     ink = tuple(int(c * 255) for c in INK)
     ink_soft = tuple(int(c * 255) for c in INK_SOFT)
@@ -110,7 +125,7 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
         return not (a[2] + pad < b[0] or b[2] + pad < a[0]
                     or a[3] + pad < b[1] or b[3] + pad < a[1])
 
-    spots = _sea_spots(world.height > 0, count=6)
+    spots = _sea_spots(land, count=6)
     page_spots = [(M + sx * RW, M + sy * RH) for sx, sy in spots]
 
     name = title or namer.title(namer.cultures[0])
@@ -120,7 +135,6 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
                                            legend_box[2] - M, legend_box[3] - M)),
                  tuple(v / scale for v in (biome_box[0] - M, biome_box[1] - M,
                                            biome_box[2] - M, biome_box[3] - M))]
-    # Reserve the strip the scale bar will occupy, so no town name lands on it.
     bar_box = (M + RW * 0.03, M + RH * 0.90, M + RW * 0.31, M + RH * 0.99)
     obstacles.append(tuple(v / scale for v in (bar_box[0] - M, bar_box[1] - M,
                                                bar_box[2] - M, bar_box[3] - M)))
@@ -131,7 +145,7 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
         x0 = min(max(cx - cw / 2, M + RW * 0.04), M + RW * 0.96 - cw)
         y0 = min(max(cy - ch / 2, M + RH * 0.04), M + RH * 0.96 - ch)
         cand = (x0, y0, x0 + cw, y0 + ch)
-        if hits(cand, legend_box, pad=RH * 0.02):
+        if hits(cand, legend_box, pad=RH * 0.02) or hits(cand, biome_box, pad=RH * 0.02):
             continue
         cart_box = cand
         obstacles.append(tuple(v / scale for v in (x0 - M, y0 - M, x0 + cw - M, y0 + ch - M)))
@@ -163,6 +177,16 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
         lb.w, lb.h = wpx / scale, hpx / scale
 
     placed = avoid(labels, ww, hh, obstacles)
+
+    # --- roads, from the towns that survived placement -------------------
+    towns = [(lb.x, lb.y) for lb in placed if lb.kind == "town"]
+    paths = roadmod.build_roads(towns, world.height, land)
+    paths = [roadmod.smooth(p, window=7) for p in paths]
+    img = render.draw_roads(img, paths, scale=scale)
+
+    img = render.finish_paper(img, world, scale=scale)
+    page.paste(Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)), (M, M))
+
     halo = max(1, int(scale * 0.8))
 
     for lb in placed:
@@ -176,11 +200,23 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
             decor.tracked_text(draw, (x + r * 2.4, y), lb.text, f, ink,
                                anchor_center=False, stroke_width=halo,
                                stroke_fill=paper_rgb)
+        elif lb.kind == "river" and abs(lb.angle) > 8:
+            decor.rotated_text(page, lb.text, (x, y), f, ink_water, lb.angle,
+                               stroke_width=halo, stroke_fill=paper_rgb)
         else:
             fill = ink_water if lb.kind in ("water", "river") else ink_soft
             decor.tracked_text(draw, (x, y), lb.text, f, fill,
                                tracking=lb.tracking, stroke_width=halo,
                                stroke_fill=paper_rgb)
+
+    # --- soundings -------------------------------------------------------
+    depth = np.maximum(-world.height, 0.0)
+    rng = np.random.default_rng(spec.seed * 17 + 5)
+    fs = decor.font("antiqua-italic", max(7, int(RW * 0.0028)))
+    for sx, sy, val in _soundings(depth, count=24, rng=rng):
+        px, py = M + sx * scale, M + sy * scale
+        draw.text((px, py), str(val), font=fs,
+                  fill=tuple(int(c * 255) for c in INK_WATER), anchor="mm")
 
     # --- the rest of the furniture --------------------------------------
     decor.draw_graticule(draw, box, spec.lat_top, spec.lat_bottom, lon_left,
@@ -189,6 +225,10 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
     decor.draw_graticule_labels(draw, box, M, spec.lat_top, spec.lat_bottom,
                                 lon_left, lon_left + lon_span, ink_soft, step=10.0,
                                 size=max(11, int(M * 0.16)))
+
+    if plate:
+        fp = decor.font("antiqua-bold", max(10, int(M * 0.19)))
+        draw.text((PW - M * 0.28, M * 0.30), plate, font=fp, fill=ink_soft, anchor="ra")
 
     if cart_box:
         decor.draw_cartouche(draw, cart_box, name, sub, ink, paper_rgb,

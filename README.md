@@ -26,12 +26,14 @@ python -m atlas --seed 7
 | **Terrain** | fractal landmass, orogenic belts, carved valley networks, lakes |
 | **Water** | steepest-descent drainage, flow accumulation, rivers drawn tapered downstream |
 | **Climate** | latitude and altitude temperature, orographic precipitation with rain shadows, Whittaker biomes, tinted into the lowlands and keyed in the legend |
+| **Provinces** | grown from watersheds, so borders follow the divides; drawn as a dotted rule |
+| **Roads** | a minimum spanning tree decides which towns connect, A\* over a terrain cost field decides where each road runs |
 | **Names** | a small invented phonology per region, so names within a province sound related |
-| **The sheet** | hypsometric tints, engraved slope shading, contours, coastal hachures, graticule, compass, scale, legend, cartouche |
-| **The gazetteer** | a page of prose assembled from the same facts the drawing uses |
+| **The sheet** | hypsometric tints, engraved slope shading, contours, coastal hachures, soundings, graticule, compass, scale, two keys, cartouche, plate number |
+| **The book** | title page, colophon, contents with dot leaders, numbered plates, gazetteer pages, index of names |
 
-Output is a PNG at roughly 3000×2300, plus an optional multi-page PDF in which
-each map is preceded by its gazetteer page.
+Output is a PNG at roughly 2700×2000, a bound PDF of eighteen pages, and a
+static viewer you can pan and zoom.
 
 ---
 
@@ -43,10 +45,10 @@ Requires Python 3.10+, `numpy` and `Pillow`. Nothing else.
 # one sheet
 python -m atlas --seed 7
 
-# a run of seeds, with a gallery page and a bound PDF
-python -m atlas --seeds 1-6 --gallery --pdf out/atlas.pdf
+# a bound book of six plates, with a gallery and an interactive viewer
+python -m atlas --seeds 1-6 --gallery --viewer --book out/atlas.pdf
 
-# bigger paper, faster iteration
+# smaller paper, faster iteration
 python -m atlas --seed 7 --width 900 --height 600 --scale 2
 ```
 
@@ -57,8 +59,9 @@ python -m atlas --seed 7 --width 900 --height 600 --scale 2
 | `--width` / `--height` | terrain grid, in cells (default 1400×950) |
 | `--scale` | output pixels per grid cell (default 2) |
 | `--title` | override the invented country name |
-| `--pdf` | bind the results into one document |
+| `--book` / `--pdf` | bind the results into one document |
 | `--gallery` | write `index.html` beside the images |
+| `--viewer` | write `viewer.html`: pan, zoom, read the gazetteer |
 
 ---
 
@@ -109,6 +112,8 @@ atlas/
   terrain.py     landmass, orogenic belts, fine detail
   hydro.py       depression filling, flow routing, accumulation, valley carving
   climate.py     temperature, orographic moisture, Whittaker biomes
+  regions.py     provinces grown from watersheds
+  roads.py       least-cost roads: spanning tree plus A*
   world.py       the pipeline, plus an on-disk cache
   shade.py       hillshade, curvature, ambient occlusion
   palette.py     inks and tints
@@ -118,6 +123,8 @@ atlas/
   labels.py      feature extraction and label placement
   compose.py     the finished sheet
   gazetteer.py   prose
+  book.py        front matter, contents, index
+  web.py         the static viewer
   cli.py         command line
 tools/           development benches used while building this
 out/             results
@@ -143,10 +150,10 @@ that can is a place.
 
 ## Status
 
-Working: terrain, hydrology, climate and biomes, relief rendering, typography,
-naming, composition, gallery, PDF.
+Working: terrain, hydrology, climate and biomes, provinces, roads, relief
+rendering, typography, naming, composition, book binding, gallery, viewer.
 
-Not yet: rivers are not labelled along their course (labels are placed, but not
-rotated to follow the water); no soundings in the sea; no inset maps; the
-composition is fixed, so a continent that happens to grow westward crowds the
-empty sea the cartouche wanted.
+Not yet: the far north has no ice cap; hachures are simulated by slope
+darkening rather than engraved as strokes; the composition is fixed, so a
+continent that grows westward crowds the empty sea the cartouche wanted; the
+index does not give folio numbers for names that appear on several plates.

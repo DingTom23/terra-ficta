@@ -1,4 +1,4 @@
-"""Command line: one seed in, one sheet out."""
+"""Command line: one seed in, one sheet out; many seeds in, one book out."""
 
 from __future__ import annotations
 
@@ -10,19 +10,30 @@ from pathlib import Path
 
 from .config import WorldSpec
 from .world import build_world
-from .naming import Namer
+from .naming import Namer, roman
 from .compose import compose
-from . import gazetteer
+from . import book, gazetteer, web
+
+COLOPHON = [
+    "Every plate in this book was computed, not drawn.  A single integer is "
+    "expanded into a height field by fractal noise; water is routed downhill "
+    "across that field; valleys are cut along the drainage; climate is derived "
+    "from latitude and altitude; provinces are grown from watersheds; and the "
+    "names are coined from a phonology invented for each province.",
+    "The same integer always produces the same country.  There is no other copy "
+    "of it anywhere, and no one has been there.",
+    "Composed with Pillow and numpy.  Set in Garamond and Book Antiqua.",
+]
 
 
 def render_sheet(seed: int, width: int = 1400, height: int = 950, scale: int = 2,
-                 title: str | None = None, verbose: bool = True):
+                 title: str | None = None, plate: str | None = None, verbose: bool = True):
     spec = WorldSpec(seed=seed, width=width, height=height)
     t0 = time.time()
     world = build_world(spec)
     t1 = time.time()
     namer = Namer(seed)
-    page, labels = compose(world, namer, scale=scale, title=title)
+    page, labels = compose(world, namer, scale=scale, title=title, plate=plate)
     t2 = time.time()
     if verbose:
         print(f"  seed {seed:>5}  terrain {t1 - t0:5.1f}s  ink {t2 - t1:5.1f}s  "
@@ -33,7 +44,7 @@ def render_sheet(seed: int, width: int = 1400, height: int = 950, scale: int = 2
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="atlas",
-        description="Generate a fictional continent and draw it as an antique sheet.",
+        description="Generate fictional continents and draw them as antique sheets.",
     )
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--seeds", type=str, default=None,
@@ -44,49 +55,83 @@ def main(argv=None):
     ap.add_argument("--title", type=str, default=None)
     ap.add_argument("--out", type=str, default=None, help="output PNG path")
     ap.add_argument("--outdir", type=str, default="out", help="directory for output")
-    ap.add_argument("--pdf", type=str, default=None, help="write a multi-page PDF")
+    ap.add_argument("--book", type=str, default=None,
+                    help="bind the plates into a book PDF at this path")
+    ap.add_argument("--pdf", type=str, default=None, help="alias for --book")
     ap.add_argument("--gallery", action="store_true", help="write an index.html gallery")
+    ap.add_argument("--viewer", action="store_true", help="write an interactive viewer.html")
     args = ap.parse_args(argv)
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-
     seeds = _parse_seeds(args.seeds) if args.seeds else [args.seed]
 
-    pages = []
+    sheets = []
     cards = []
-    for seed in seeds:
+    viewer_items = []
+    for i, seed in enumerate(seeds):
+        plate = f"PLATE {roman(i + 1)}" if len(seeds) > 1 else None
         world, namer, page, labels = render_sheet(
             seed, args.width, args.height, args.scale,
-            args.title if len(seeds) == 1 else None)
+            args.title if len(seeds) == 1 else None, plate=plate)
 
-        if args.out and len(seeds) == 1:
-            path = Path(args.out)
-        else:
-            path = outdir / f"atlas_{seed:04d}.png"
+        path = Path(args.out) if (args.out and len(seeds) == 1) else outdir / f"atlas_{seed:04d}.png"
         page.save(path)
         print(f"  -> {path}")
 
-        title, subtitle, paras = gazetteer.describe(world, labels, namer.title(namer.cultures[0]))
-        pages.append(page)
+        title, subtitle, paras = gazetteer.describe(
+            world, labels, namer.title(namer.cultures[0]))
+        sheets.append((plate, page, title, subtitle, paras, labels))
         cards.append((path, title, subtitle, paras))
-
-        if args.pdf:
-            pages.insert(len(pages) - 1,
-                         gazetteer.text_page(title, subtitle, paras,
-                                             size=(page.size[0], page.size[1]), seed=seed))
+        viewer_items.append({"image": path.name, "title": title,
+                             "subtitle": subtitle, "paras": paras,
+                             "plate": plate or ""})
 
     if args.gallery:
         _write_gallery(outdir / "index.html", cards)
         print(f"  -> {outdir / 'index.html'}")
 
-    if args.pdf and pages:
-        pdf_path = Path(args.pdf)
-        pages[0].save(pdf_path, "PDF", resolution=150.0, save_all=True,
+    if args.viewer:
+        vp = outdir / "viewer.html"
+        vp.write_text(web.viewer_html(viewer_items), encoding="utf-8")
+        print(f"  -> {vp}")
+
+    target = args.book or args.pdf
+    if target:
+        pages = _assemble_book(sheets, seeds)
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
+        pages[0].save(target, "PDF", resolution=150.0, save_all=True,
                       append_images=pages[1:])
-        print(f"  -> {pdf_path}  ({len(pages)} pages)")
+        print(f"  -> {target}  ({len(pages)} pages)")
 
     return 0
+
+
+def _assemble_book(sheets, seeds):
+    size = sheets[0][1].size
+    pages = []
+    pages.append(book.title_page(size, "Atlas", "countries that were never surveyed",
+                                 roman(1800 + (seeds[0] % 99)), len(sheets)))
+    pages.append(book.colophon_page(size, COLOPHON))
+
+    contents = []
+    index = {}
+    for i, (plate, page, title, subtitle, paras, labels) in enumerate(sheets):
+        num = roman(i + 1)
+        folio = 4 + 2 * i
+        contents.append((num, title, folio))
+        for lb in labels:
+            index.setdefault(lb.text.title(), num)
+    pages.append(book.contents_page(size, contents))
+
+    for plate, page, title, subtitle, paras, labels in sheets:
+        pages.append(page)
+        pages.append(gazetteer.text_page(title, subtitle, paras, size=size,
+                                         seed=sum(ord(c) for c in title) % 1000))
+
+    entries = sorted(index.items(), key=lambda kv: kv[0].lower())
+    pages.extend(book.index_pages(size, entries))
+    return pages
 
 
 def _parse_seeds(text: str):
