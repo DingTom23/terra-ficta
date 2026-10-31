@@ -38,39 +38,36 @@ def describe(world, labels, name: str):
     paras = []
     opening = (
         f"{name.title()} lies between the {int(lat_bot)}th and {int(lat_top)}th parallels, "
-        f"a country of {int(land.mean() * 100)} parts land to {100 - int(land.mean() * 100)} of water."
+        f"and holds {int(land.mean() * 100)} parts land to {100 - int(land.mean() * 100)} of water."
     )
     if seas:
-        opening += f" Its western approaches are held by the {seas[0]}"
+        opening += f" The {seas[0]} breaks upon its western shore"
         if len(seas) > 1:
             opening += f", and the {seas[1]} closes it to the east"
         opening += "."
     paras.append(opening)
 
-    relief = f"The interior rises to {int(round(peak, -2))} metres."
+    relief = f"The ground rises to {int(round(peak, -2))} metres."
     if ranges:
         relief += f" The {ranges[0]}"
         if len(ranges) > 1:
             relief += f" and the {ranges[1]}"
-        relief += " carry the highest ground, and the rivers that leave them run clear to the sea."
+        relief += " carry the highest of it, and the waters that leave them run clear to the sea."
     paras.append(relief)
 
     if rivers:
-        body = f"The {rivers[0]} is the longest of the waters shown here"
+        body = f"The {rivers[0]} is the longest of the rivers shown"
         others = [r for r in rivers[1:] if r != rivers[0]]
         if others:
-            body += f"; the {others[0]}"
+            body += f", with the {others[0]}"
             if len(others) > 1:
                 body += f" and the {others[1]}"
-            body += " are its chief tributaries"
+            body += " among its tributaries"
         body += "."
+        if lake_cells > 400:
+            body += (f" Lakes take up {lake_cells / max(land.sum(), 1) * 100:.1f} parts in a "
+                     "hundred of the land, most of them strung along the greater courses.")
         paras.append(body)
-
-    if lake_cells > 400:
-        paras.append(
-            f"Lakes occupy {lake_cells / max(land.sum(), 1) * 100:.1f} parts in a hundred of the "
-            "land, most of them strung along the courses of the greater rivers."
-        )
 
     if regions:
         body = "The country is divided into "
@@ -82,13 +79,9 @@ def describe(world, labels, name: str):
             body += ", ".join(regions[:-1]) + f" and {regions[-1]}"
         body += "."
         if towns:
-            body += f" Of the towns, {towns[0]} is the largest, and {towns[-1]} the most remote."
+            body += f" Of the towns, {towns[0]} is the largest and {towns[-1]} the most remote."
+        body += " No part of this country has been visited twice."
         paras.append(body)
-
-    paras.append(
-        "The coast is drawn at the survey of the year given in the title, and the "
-        "soundings are in fathoms. No part of this country has been visited twice."
-    )
 
     return name.title(), f"a survey of the country, in {max(len(regions), 1)} provinces", paras
 
@@ -103,7 +96,12 @@ def _unique(items):
 
 
 def text_page(title, subtitle, paragraphs, size=(1600, 2000), seed=0):
-    """Set a gazetteer page: title, rule, justified-looking prose."""
+    """Set a gazetteer page: title, rule, and prose sized to fit the sheet.
+
+    The body is set by measurement, not by hope.  A page whose last paragraph
+    runs off the bottom, or whose colophon lands on top of it, is worse than a
+    page in smaller type.
+    """
     w, h = size
     page = Image.new("RGB", size, tuple(int(c * 255) for c in PAPER))
     draw = ImageDraw.Draw(page)
@@ -111,27 +109,41 @@ def text_page(title, subtitle, paragraphs, size=(1600, 2000), seed=0):
     soft = tuple(int(c * 255) for c in INK_SOFT)
 
     margin = int(w * 0.12)
-    ft = decor.font("antiqua-bold", int(w * 0.040))
-    decor.tracked_text(draw, (w / 2, margin * 1.4), title.upper(), ft, ink,
+    ft = decor.font("antiqua-bold", int(w * 0.036))
+    decor.tracked_text(draw, (w / 2, margin * 0.92), title.upper(), ft, ink,
                        tracking=ft.size * 0.18)
-    fs = decor.font("antiqua-italic", int(w * 0.020))
-    draw.text((w / 2, margin * 1.4 + ft.size * 1.7), subtitle, font=fs, fill=soft, anchor="mm")
+    fs = decor.font("antiqua-italic", int(w * 0.0185))
+    draw.text((w / 2, margin * 0.92 + ft.size * 1.55), subtitle, font=fs, fill=soft, anchor="mm")
 
-    rule_y = margin * 1.4 + ft.size * 2.6
+    rule_y = margin * 0.92 + ft.size * 2.30
     draw.line([(w * 0.26, rule_y), (w * 0.74, rule_y)], fill=ink, width=1)
 
-    fb = decor.font("serif", int(w * 0.019))
-    y = rule_y + int(w * 0.05)
-    lead = int(fb.size * 1.72)
     col_w = w - 2 * margin
+    top = rule_y + margin * 0.42
+    bottom = h - margin * 0.62
+    avail = bottom - top
 
-    for para in paragraphs:
-        for line in _wrap(draw, para, fb, col_w):
+    # Fit: the largest body size whose measured column clears the foot.
+    size_px = max(11, int(w * 0.0165))
+    floor = max(10, int(w * 0.0122))
+    while True:
+        fb = decor.font("serif", size_px)
+        lead = int(size_px * 1.58)
+        gap = int(lead * 0.46)
+        blocks = [_wrap(draw, para, fb, col_w) for para in paragraphs]
+        total = sum(len(b) for b in blocks) * lead + gap * max(0, len(blocks) - 1)
+        if total <= avail or size_px <= floor:
+            break
+        size_px -= 1
+
+    y = top
+    for block in blocks:
+        for line in block:
             draw.text((margin, y), line, font=fb, fill=ink)
             y += lead
-        y += int(lead * 0.42)
+        y += gap
 
-    draw.text((w / 2, h - margin * 0.6), "— finis —", font=fs, fill=soft, anchor="mm")
+    draw.text((w / 2, h - margin * 0.26), "— finis —", font=fs, fill=soft, anchor="mm")
     return page
 
 

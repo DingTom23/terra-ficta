@@ -20,6 +20,28 @@ def _blank(size):
     return page, ImageDraw.Draw(page)
 
 
+PAGE = (2400, 1700)
+
+
+def place_plate(plate, size=PAGE, margin=0.035):
+    """Set a plate on a page of the standard size, centred.
+
+    Plates are framed on their own subjects and therefore come in different
+    shapes.  A bound atlas does not resize its page to suit each map; it
+    prints the map at whatever size the page allows and lets the margin absorb
+    the difference.  That is what this does.
+    """
+    w, h = size
+    pw, ph = plate.size
+    k = min(w * (1 - 2 * margin) / pw, h * (1 - 2 * margin) / ph)
+    if abs(k - 1.0) > 2e-3:
+        nw, nh = max(1, int(pw * k)), max(1, int(ph * k))
+        plate = plate.resize((nw, nh), Image.LANCZOS)
+    page, _ = _blank(size)
+    page.paste(plate, ((w - plate.size[0]) // 2, (h - plate.size[1]) // 2))
+    return page
+
+
 def _rule(draw, y, width, x0, x1, ink, weight=1):
     draw.line([(x0, y), (x1, y)], fill=ink, width=weight)
 
@@ -90,15 +112,22 @@ def contents_page(size, entries):
 
     f = decor.font("serif", int(w * 0.015))
     fy = decor.font("antiqua", int(w * 0.015))
+    fnum = decor.font("antiqua", int(w * 0.014))
     x0, x1 = w * 0.20, w * 0.80
     y = h * 0.24
     lead = int(f.size * 2.1)
 
+    # The plate column is as wide as the widest plate label, measured, not
+    # guessed: "PLATE III" is nearly twice the width of "PLATE I", and a fixed
+    # offset ran the two columns together on every third line.
+    col = max((draw.textlength(num, font=fnum) for num, _, _ in entries), default=0)
+    tx = x0 + col + f.size * 0.9
+
     for num, name, folio in entries:
-        draw.text((x0, y), num, font=decor.font("antiqua", int(w * 0.014)), fill=soft)
-        draw.text((x0 + w * 0.055, y), name, font=f, fill=ink)
+        draw.text((x0, y), num, font=fnum, fill=soft)
+        draw.text((tx, y), name, font=f, fill=ink)
         tw = draw.textlength(name, font=f)
-        dots_from = x0 + w * 0.055 + tw + f.size * 0.4
+        dots_from = tx + tw + f.size * 0.4
         dots_to = x1 - f.size * 1.4
         if dots_to > dots_from:
             step = f.size * 0.42
@@ -111,36 +140,40 @@ def contents_page(size, entries):
     return page
 
 
-def index_pages(size, entries, per_page=72):
-    """Alphabetical index of every name in the book, with its plate."""
+def index_pages(size, entries, per_page=64):
+    """An index set in two columns, as an index should be.
+
+    One narrow column leaves two thirds of the page blank and forces the list
+    to run to several pages for no reason.
+    """
     w, h = size
     pages = []
-    head = decor.font("antiqua-bold", int(w * 0.024))
-    f = decor.font("serif", int(w * 0.0125))
-    cols = 3
-    col_w = (w * 0.72) / cols
-    lead = int(f.size * 1.85)
-    rows = per_page // cols
+    ink = tuple(int(c * 255) for c in INK)
+    soft = tuple(int(c * 255) for c in INK_SOFT)
 
-    for start in range(0, max(len(entries), 1), per_page):
-        chunk = entries[start:start + per_page]
+    chunks = [entries[i:i + per_page * 2] for i in range(0, len(entries), per_page * 2)]
+    for page_no, chunk in enumerate(chunks or [[]]):
         page, draw = _blank(size)
-        ink = tuple(int(c * 255) for c in INK)
-        soft = tuple(int(c * 255) for c in INK_SOFT)
-        decor.tracked_text(draw, (w / 2, h * 0.10), "INDEX OF NAMES", head, ink,
-                           tracking=head.size * 0.28)
-        _rule(draw, h * 0.145, 0, w * 0.30, w * 0.70, ink, 1)
+        head = decor.font("antiqua-bold", int(w * 0.024))
+        label = "INDEX OF NAMES" if page_no == 0 else "INDEX OF NAMES, CONTINUED"
+        decor.tracked_text(draw, (w / 2, h * 0.11), label, head, ink,
+                           tracking=head.size * 0.3)
+        _rule(draw, h * 0.155, 0, w * 0.36, w * 0.64, ink, 1)
 
-        x0 = w * 0.14
-        for i, (name, plate) in enumerate(chunk):
-            c = i // rows
-            r = i % rows
-            if c >= cols:
-                break
-            x = x0 + c * col_w
-            y = h * 0.21 + r * lead
-            draw.text((x, y), name, font=f, fill=ink)
-            draw.text((x + col_w - f.size * 0.6, y), str(plate), font=f, fill=soft, anchor="ra")
+        f = decor.font("serif", int(w * 0.0142))
+        half = min(per_page, (len(chunk) + 1) // 2) if chunk else 0
+        top = h * 0.215
+        lead = min(int(f.size * 1.85), int((h * 0.80 - top) / max(half, 1)))
+
+        for col in range(2):
+            part = chunk[col * half:(col + 1) * half] if col else chunk[:half]
+            x0 = w * (0.12 + 0.42 * col)
+            x1 = w * (0.46 + 0.42 * col)
+            y = top
+            for name, folio in part:
+                draw.text((x0, y), name, font=f, fill=ink)
+                draw.text((x1, y), folio, font=f, fill=soft, anchor="ra")
+                y += lead
         pages.append(page)
     return pages
 

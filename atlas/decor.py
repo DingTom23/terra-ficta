@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 FONT_DIR = "C:/Windows/Fonts"
 _SERIF = "GARA.TTF"
@@ -79,36 +79,91 @@ def rotated_text(page, text, xy, fnt, fill, angle, stroke_width=0, stroke_fill=N
     page.paste(rot, (int(x - rot.width / 2), int(y - rot.height / 2)), rot)
 
 
-def draw_frame(draw, box, margin, ink, paper):
-    """Double neat line, with the band between them reserved for degrees."""
+def draw_frame(draw, box, margin, ink, paper, lat_top=0.0, lat_bottom=0.0,
+               lon_left=0.0, lon_right=0.0, step=10.0, sub=4):
+    """Neat line, graduated chequer border, and outer rule.
+
+    The chequer is the cheapest thing on the sheet and the one that dates it:
+    a plain rule says "printed", alternating blocks say "surveyed".  One
+    black block per half-degree of a ten-degree step is about the scale of a
+    plate whose border is read at arm's length.
+    """
     x0, y0, x1, y1 = box
-    outer = margin * 0.25
-    inner = margin * 0.62
+    # A full-contrast zebra pulls the eye off the map.  The blocks are printed
+    # in ink let down toward the paper, the way a graduated border actually
+    # looks on a plate that has been pulled twice.
+    block = tuple(int(round(i * 0.80 + p * 0.20)) for i, p in zip(ink, paper))
+    bw = max(3, int(round(margin * 0.15)))
+    thin = margin * 0.42
+    thick = margin * 0.56
 
-    draw.rectangle([x0 - outer, y0 - outer, x1 + outer, y1 + outer],
-                   outline=ink, width=max(2, int(margin * 0.045)))
-    draw.rectangle([x0 - inner, y0 - inner, x1 + inner, y1 + inner],
-                   outline=ink, width=max(1, int(margin * 0.010)))
+    def comb(lo, hi, a, b, vertical):
+        span = hi - lo
+        if span <= 0.0:
+            return
+        # Subdivide each degree cell until the blocks come out roughly square.
+        # A fixed subdivision gives blocks twice as wide as they are tall on a
+        # long edge, and the border stops reading as a scale and starts
+        # reading as a picture frame.
+        cells = max(1, int(round(span / step)))
+        per = max(2, int(round((b - a) / (cells * bw * 1.05))))
+        n = cells * per
+        for k in range(n):
+            if k % 2:
+                continue
+            t0, t1 = k / n, (k + 1) / n
+            if vertical:
+                ya = a + (b - a) * t0
+                yb = a + (b - a) * t1
+                draw.rectangle([x0 - bw, ya, x0, yb], fill=block)
+                draw.rectangle([x1, ya, x1 + bw, yb], fill=block)
+            else:
+                xa = a + (b - a) * t0
+                xb = a + (b - a) * t1
+                draw.rectangle([xa, y0 - bw, xb, y0], fill=block)
+                draw.rectangle([xa, y1, xb, y1 + bw], fill=block)
+
+    comb(lon_left, lon_right, x0, x1, False)
+    comb(lat_bottom, lat_top, y0, y1, True)
+
     draw.rectangle([x0, y0, x1, y1], outline=ink, width=max(1, int(margin * 0.012)))
+    draw.rectangle([x0 - bw, y0 - bw, x1 + bw, y1 + bw], outline=ink,
+                   width=max(1, int(margin * 0.010)))
+    draw.rectangle([x0 - thin, y0 - thin, x1 + thin, y1 + thin], outline=ink,
+                   width=max(1, int(margin * 0.008)))
+    draw.rectangle([x0 - thick, y0 - thick, x1 + thick, y1 + thick], outline=ink,
+                   width=max(2, int(margin * 0.038)))
 
 
-def draw_graticule(draw, box, lat_top, lat_bottom, lon_left, lon_right, ink, step=10.0, alpha=0.16):
+def draw_graticule(page, box, lat_top, lat_bottom, lon_left, lon_right, ink, step=10.0,
+                   alpha=0.10):
+    """The ruled grid of the projection.
+
+    Drawn on its own layer and composited, not painted into the page.  A
+    graticule has to sit *in* the map at a few percent; pre-blending the ink
+    toward white and drawing that gives a near-white rule instead, which is
+    the opposite of subtle.
+    """
     x0, y0, x1, y1 = box
     w = x1 - x0
     h = y1 - y0
-    ink = _rgb(tuple(c * alpha + 1.0 * (1 - alpha) for c in ink))
+    layer = Image.new("RGBA", page.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    col = tuple(int(round(c * 255)) for c in ink) + (int(round(alpha * 255)),)
 
     lat = math.ceil(lat_bottom / step) * step
     while lat <= lat_top:
         y = y0 + (lat_top - lat) / (lat_top - lat_bottom) * h
-        draw.line([(x0, y), (x1, y)], fill=ink, width=1)
+        d.line([(x0, y), (x1, y)], fill=col, width=1)
         lat += step
 
     lon = math.ceil(lon_left / step) * step
     while lon <= lon_right:
         x = x0 + (lon - lon_left) / (lon_right - lon_left) * w
-        draw.line([(x, y0), (x, y1)], fill=ink, width=1)
+        d.line([(x, y0), (x, y1)], fill=col, width=1)
         lon += step
+
+    return Image.alpha_composite(page.convert("RGBA"), layer).convert("RGB")
 
 
 def draw_graticule_labels(draw, box, margin, lat_top, lat_bottom, lon_left, lon_right,
@@ -118,7 +173,7 @@ def draw_graticule_labels(draw, box, margin, lat_top, lat_bottom, lon_left, lon_
     w = x1 - x0
     h = y1 - y0
     f = font("serif", size)
-    band = margin * 0.435
+    band = margin * 0.415
 
     lat = math.ceil(lat_bottom / step) * step
     while lat <= lat_top:
@@ -135,6 +190,28 @@ def draw_graticule_labels(draw, box, margin, lat_top, lat_bottom, lon_left, lon_
         draw.text((x, y0 - band), txt, font=f, fill=ink, anchor="mb")
         draw.text((x, y1 + band), txt, font=f, fill=ink, anchor="mt")
         lon += step
+
+
+def draw_rhumbs(page, origin, box, water, ink, alpha=0.10, count=32):
+    """Navigational rays radiating from the compass, laid over water only.
+
+    A sea chart is a measuring instrument before it is a picture: the web of
+    rhumbs is what tells a navigator the bearing between two roads.  They are
+    drawn on their own layer and cut by the water mask so that no ray ever
+    crosses a headland.
+    """
+    layer = Image.new("RGBA", page.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    x0, y0, x1, y1 = box
+    cx, cy = origin
+    reach = int(math.hypot(x1 - x0, y1 - y0)) * 2
+    col = _rgb(ink) + (int(round(alpha * 255)),)
+    for i in range(count):
+        a = i * (2.0 * math.pi / count)
+        d.line([(cx, cy), (cx + math.cos(a) * reach, cy + math.sin(a) * reach)],
+               fill=col, width=1)
+    layer.putalpha(ImageChops.multiply(layer.getchannel("A"), water))
+    return Image.alpha_composite(page.convert("RGBA"), layer).convert("RGB")
 
 
 def draw_compass(draw, cx, cy, r, ink, paper):
@@ -173,7 +250,10 @@ def draw_scale_bar(draw, x, y, width, ink, paper, units="leagues", segments=4, h
     f = font("serif", max(10, int(h * 1.5)))
     fi = font("serif-italic", max(10, int(h * 1.5)))
     draw.text((x, y - h * 1.7), "0", font=f, fill=_rgb(ink), anchor="mb")
-    draw.text((x + width, y - h * 1.7), units.capitalize(), font=fi, fill=_rgb(ink), anchor="mb")
+    # Right-anchored, not centred: a centred label hangs half its width past
+    # the end of the bar, and on a bar placed near the frame that half lands
+    # outside the plate.
+    draw.text((x + width, y - h * 1.7), units.capitalize(), font=fi, fill=_rgb(ink), anchor="rb")
 
 
 def draw_cartouche(draw, box, title, subtitle, ink, paper, title_size, sub_size):

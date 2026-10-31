@@ -5,6 +5,10 @@ the ground, which means it follows valleys and refuses slopes.  So the network
 is built in two steps -- a minimum spanning tree decides *which* towns are
 connected, and an A* search over a terrain cost field decides *where* each road
 actually goes.
+
+Two towns on separate islands are not connected by a road, no matter how badly
+the spanning tree wants them to be.  So the passable ground is split into
+components first and each component gets its own tree.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ import math
 import numpy as np
 
 SQRT2 = math.sqrt(2.0)
+WATER = 1e5
 
 
 def cost_field(height, land, factor=3):
@@ -27,7 +32,34 @@ def cost_field(height, land, factor=3):
     slope = np.hypot(gx, gy)
 
     c = 1.0 + np.clip(np.maximum(h, 0) / 450.0, 0, 8) ** 1.4 + np.clip(slope / 35.0, 0, 5)
-    return np.where(l, c, 1e6), factor
+    return np.where(l, c, WATER), factor
+
+
+def components(cost):
+    """Label the connected passable regions of the cost grid."""
+    H, W = cost.shape
+    lab = np.zeros((H, W), dtype=np.int32)
+    remaining = cost < WATER
+    cur = 0
+    while remaining.any():
+        ys, xs = np.nonzero(remaining)
+        y0, x0 = int(ys[0]), int(xs[0])
+        cur += 1
+        frontier = np.zeros((H, W), dtype=bool)
+        frontier[y0, x0] = True
+        lab[y0, x0] = cur
+        remaining[y0, x0] = False
+        while frontier.any():
+            grow = np.zeros((H, W), dtype=bool)
+            grow[1:, :] |= frontier[:-1, :]
+            grow[:-1, :] |= frontier[1:, :]
+            grow[:, 1:] |= frontier[:, :-1]
+            grow[:, :-1] |= frontier[:, 1:]
+            grow &= remaining
+            lab[grow] = cur
+            remaining &= ~grow
+            frontier = grow
+    return lab
 
 
 def _astar(cost, start, goal):
@@ -36,7 +68,7 @@ def _astar(cost, start, goal):
         return None
     sx, sy = start
     gx, gy = goal
-    if cost[sy, sx] >= 1e5 or cost[gy, gx] >= 1e5:
+    if cost[sy, sx] >= WATER or cost[gy, gx] >= WATER:
         return None
 
     def h(x, y):
@@ -60,6 +92,8 @@ def _astar(cost, start, goal):
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
             nx, ny = x + dx, y + dy
             if not (0 <= nx < W and 0 <= ny < H):
+                continue
+            if cost[ny, nx] >= WATER:
                 continue
             step = SQRT2 if dx and dy else 1.0
             ng = g + step * cost[ny, nx]
@@ -104,13 +138,13 @@ def _nearest_passable(cost, x, y, radius=8):
     H, W = cost.shape
     x = min(max(x, 0), W - 1)
     y = min(max(y, 0), H - 1)
-    if cost[y, x] < 1e5:
+    if cost[y, x] < WATER:
         return (x, y)
     best, bestd = None, 1e18
     for dy in range(-radius, radius + 1):
         for dx in range(-radius, radius + 1):
             nx, ny = x + dx, y + dy
-            if 0 <= nx < W and 0 <= ny < H and cost[ny, nx] < 1e5:
+            if 0 <= nx < W and 0 <= ny < H and cost[ny, nx] < WATER:
                 d = dx * dx + dy * dy
                 if d < bestd:
                     best, bestd = (nx, ny), d
@@ -122,22 +156,29 @@ def build_roads(towns, height, land, factor=3):
     if len(towns) < 2:
         return []
     cost, f = cost_field(height, land, factor)
-    H, W = cost.shape
+    lab = components(cost)
 
     pts = []
     for x, y in towns:
         p = _nearest_passable(cost, int(x // f), int(y // f))
-        if p is None:
-            continue
-        pts.append(p)
+        if p is not None:
+            pts.append(p)
     if len(pts) < 2:
         return []
 
+    groups = {}
+    for i, (x, y) in enumerate(pts):
+        groups.setdefault(int(lab[y, x]), []).append(i)
+
     paths = []
-    for a, b in _mst(pts):
-        p = _astar(cost, pts[a], pts[b])
-        if p and len(p) > 1:
-            paths.append([(x * f, y * f) for x, y in p])
+    for ids in groups.values():
+        if len(ids) < 2:
+            continue
+        sub = [pts[i] for i in ids]
+        for a, b in _mst(sub):
+            p = _astar(cost, sub[a], sub[b])
+            if p and len(p) > 1:
+                paths.append([(x * f, y * f) for x, y in p])
     return paths
 
 

@@ -29,10 +29,12 @@ python -m atlas --seed 7
 | **Provinces** | grown from watersheds, so borders follow the divides; drawn as a dotted rule |
 | **Roads** | a minimum spanning tree decides which towns connect, A\* over a terrain cost field decides where each road runs |
 | **Names** | a small invented phonology per region, so names within a province sound related |
-| **The sheet** | hypsometric tints, hillshade, jittered slope hachures drawn down the fall line, contours, coastal hachures, soundings, graticule, compass, scale, two keys, cartouche, plate number |
+| **Framing** | the plate is cut to its subject: the largest landmass plus any island that mostly falls inside it, then a furniture solver finds open water for the cartouche, compass, keys and scale bar |
+| **The physical sheet** | hypsometric tints, hillshade, jittered slope hachures drawn down the fall line, contours, coastal hachures, soundings, rhumb lines, graticule, graduated chequer border, compass, scale, two keys, cartouche, plate number |
+| **The political sheet** | the same country flat-washed by province, boundaries drawn solid, a numbered key, and the relief dropped to a whisper |
 | **The book** | title page, colophon, contents with dot leaders, numbered plates, gazetteer pages, index of names |
 
-Output is a PNG at roughly 2700×2000, a bound PDF of eighteen pages, and a
+Output is a PNG at roughly 2700×2000, a bound PDF of twenty-two pages, and a
 static viewer you can pan and zoom.
 
 ---
@@ -45,8 +47,8 @@ Requires Python 3.10+, `numpy` and `Pillow`. Nothing else.
 # one sheet
 python -m atlas --seed 7
 
-# a bound book of six plates, with a gallery and an interactive viewer
-python -m atlas --seeds 1-6 --gallery --viewer --book out/atlas.pdf
+# a bound book of six countries, each with a physical and a political plate
+python -m atlas --seeds 1-6 --political --gallery --viewer --book out/atlas.pdf
 
 # smaller paper, faster iteration
 python -m atlas --seed 7 --width 900 --height 600 --scale 2
@@ -117,7 +119,8 @@ atlas/
   world.py       the pipeline, plus an on-disk cache
   shade.py       hillshade, curvature, ambient occlusion
   palette.py     inks and tints
-  render.py      the drawing itself
+  layout.py      framing: which window of the world, and where the furniture fits
+  render.py      the drawing itself, physical and political
   decor.py       frame, graticule, compass, scale bar, cartouche, legend
   naming.py      invented phonologies and toponymy
   labels.py      feature extraction and label placement
@@ -151,9 +154,18 @@ that can is a place.
 ## Status
 
 Working: terrain, hydrology, climate and biomes, provinces, roads, relief
-rendering, typography, naming, composition, book binding, gallery, viewer.
+rendering, framing, furniture placement, typography, naming, physical and
+political composition, book binding, gallery, viewer.
 
-Not yet: the far north has no ice cap; hachures are simulated by slope
-darkening rather than engraved as strokes; the composition is fixed, so a
-continent that grows westward crowds the empty sea the cartouche wanted; the
-index does not give folio numbers for names that appear on several plates.
+Still wrong, and known to be wrong:
+
+- The far north has no ice cap. Latitude cools the temperature but nothing
+  actually accumulates as ice, so a polar sea is drawn as open water.
+- The index gives one folio per name. A river that runs through three plates
+  is listed once.
+- Islands are lobed by construction, which is honest but monotonous: the
+  harmonic sum is the same shape at every scale.
+- Nothing distinguishes a capital from a village except the label; a political
+  plate wants symbols of rank, and does not have them.
+- The gazetteer is generated from the same statistics that drew the map, so it
+  can describe a country accurately and still tell you nothing about it.

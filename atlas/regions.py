@@ -75,7 +75,29 @@ def provinces(height, rec, k=5, seed=0):
     flat = np.where(land, flat, -1).astype(np.int16)
 
     mouths = [(int(ox[i]), int(oy[i]), int(counts[i])) for i in range(len(outlets))]
-    return flat.reshape(h, w), mouths
+    grid = _grow(flat.reshape(h, w), (height > 0), limit=160)
+    return grid, mouths
+
+
+def _grow(region, land, limit=160):
+    """Give every land cell a province.
+
+    A cell drains to a mouth outside the top-k, so it never got a label; on the
+    political plate those cells printed as pale holes along the coasts and in
+    the corners.  Grow the labels outward until nothing is left blank.
+    """
+    out = region.copy()
+    for _ in range(limit):
+        empty = land & (out < 0)
+        if not empty.any():
+            break
+        nb = np.full(out.shape, -1, dtype=out.dtype)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1),
+                       (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            sh = np.roll(np.roll(out, dy, 0), dx, 1)
+            nb = np.where((nb < 0) & (sh >= 0), sh, nb)
+        out = np.where(empty & (nb >= 0), nb, out)
+    return out
 
 
 def borders(region, land):

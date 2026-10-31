@@ -67,15 +67,30 @@ def _blobs(rng, spec: WorldSpec):
 
 
 def _blob_distance(x, y, blobs):
-    """Union of rotated-ellipse distance fields; 1.0 on an outline, <1 inside."""
+    """Union of rotated-ellipse distance fields; 1.0 on an outline, <1 inside.
+
+    An island is the one landform a blob cannot fake.  Every noise octave in
+    the stack has a wavelength longer than a small island is wide, so the
+    noise arrives there as a constant offset -- and a constant offset on an
+    ellipse is still an ellipse.  Islands therefore get their outline written
+    into the distance field itself: a sum of harmonics in the polar angle,
+    which is cheap, deterministic, and gives the lobed profile that a real
+    island has and a formula does not.
+    """
     d = np.full_like(x, 1e9)
-    for cx, cy, rx, ry, ang, weight in blobs:
+    for i, (cx, cy, rx, ry, ang, weight) in enumerate(blobs):
         ca, sa = np.cos(ang), np.sin(ang)
         dx = x - cx
         dy = y - cy
         xr = dx * ca + dy * sa
         yr = -dx * sa + dy * ca
         r = np.sqrt((xr / rx) ** 2 + (yr / ry) ** 2) / weight
+        if weight < 0.8:
+            a = np.arctan2(yr, xr)
+            lobes = (1.0 + 0.34 * np.sin(3.0 * a + i * 1.7)
+                     + 0.18 * np.sin(5.0 * a + i * 2.9)
+                     + 0.10 * np.sin(9.0 * a + i * 0.6))
+            r = r / lobes
         np.minimum(d, r, out=d)
     return d
 
@@ -119,7 +134,19 @@ def build_base(spec: WorldSpec):
     coast = fbm(spec.seed + 23, octaves=4)(wx, wy, freq=spec.coast_freq, gain=0.46)
 
     band = np.exp(-(body / 0.22) ** 2)
-    potential = body + spec.coast_noise * band * coast
+
+    # A second, shorter wave on the coast.  The main coast noise has a
+    # wavelength of most of a map width, which is fine for a continent but is
+    # effectively a constant across a small island -- and a constant offset on
+    # an ellipse is still an ellipse.  Without this term every island is an egg.
+    # The same argument applies to the noise: a small island is only a few
+    # wavelengths of the main coast term, so its outline is drawn by the short
+    # wave.  Wrapping that wave in a warp of its own is what turns the egg into
+    # a shape with bays.
+    dx_, dy_ = warp(spec.seed + 43, amp=1.0, octaves=2)(
+        x, y, freq=spec.coast_freq * 7.0, strength=0.020)
+    detail_coast = fbm(spec.seed + 29, octaves=4)(dx_, dy_, freq=spec.coast_freq * 5.5, gain=0.5)
+    potential = body + band * (spec.coast_noise * coast + 0.30 * detail_coast)
 
     # Keep the continent off the edge of the sheet: a map whose land runs off
     # the paper reads as a crop, not as a place.
@@ -129,8 +156,10 @@ def build_base(spec: WorldSpec):
     potential = potential * (0.25 + 0.75 * border) - (1.0 - border) * 0.75
 
     # Smooth before thresholding.  Without this the level set grows thin
-    # fingers wherever the noise gradient rivals the body gradient.
-    potential = blur(potential, max(1.5, spec.width / 150.0), passes=3)
+    # fingers wherever the noise gradient rivals the body gradient.  The
+    # radius is kept small on purpose: a wide blur also erases the coast of
+    # every small island, and an island that has been blurred is an egg.
+    potential = blur(potential, max(1.0, spec.width / 320.0), passes=2)
 
     sea = float(np.quantile(potential, 1.0 - spec.land_fraction))
     relief = potential - sea

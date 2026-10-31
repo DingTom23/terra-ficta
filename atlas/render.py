@@ -139,7 +139,7 @@ def render_terrain(world, scale=2, z_factor=340.0, contour_interval=200.0):
         for k, (_name, colour) in BIOMES.items():
             b_rgb[biome == k] = colour
         b_hi = upsample_rgb(b_rgb, RW, RH)
-        a = (0.52 * np.exp(-np.maximum(h, 0.0) / 1700.0) * land_m)[..., None]
+        a = (0.44 * np.exp(-np.maximum(h, 0.0) / 1700.0) * land_m)[..., None]
         land_rgb = land_rgb * (1.0 - a) + b_hi * a
 
     img = sea_rgb * (1.0 - land_m[..., None]) + land_rgb * land_m[..., None]
@@ -147,14 +147,97 @@ def render_terrain(world, scale=2, z_factor=340.0, contour_interval=200.0):
     # --- ink ------------------------------------------------------------
     ink = np.array(INK, dtype=np.float32)
 
-    hach = coastal_hachures(np.maximum(-h, 0.0), spacing=13.0, max_depth=1600.0)
+    # Water lining has to hug the shore.  At 13 m of depth between rings the
+    # bands run out to 1600 m and turn the whole sea into wood grain.
+    hach = coastal_hachures(blur(np.maximum(-h, 0.0), max(1.0, 2.0 * scale), passes=2),
+                            spacing=45.0, max_depth=420.0)
     hach = hach * (1.0 - land_m)
     img = _mix(img, np.array(INK_WATER, dtype=np.float32), hach * 0.50)
 
     alpha, idx = contours(np.maximum(h, 0.0), interval=contour_interval)
-    img = _mix(img, ink, alpha * 0.34 * land_m)
-    img = _mix(img, ink, idx * 0.46 * land_m)
+    img = _mix(img, ink, alpha * 0.26 * land_m)
+    img = _mix(img, ink, idx * 0.36 * land_m)
 
+    return img, h, land_m
+
+
+PROVINCE_TINTS = [
+    (0.815, 0.520, 0.455),
+    (0.590, 0.700, 0.520),
+    (0.835, 0.700, 0.430),
+    (0.520, 0.640, 0.760),
+    (0.760, 0.545, 0.660),
+    (0.700, 0.680, 0.610),
+    (0.820, 0.630, 0.470),
+    (0.545, 0.690, 0.650),
+    (0.780, 0.620, 0.580),
+    (0.630, 0.600, 0.740),
+]
+
+
+def province_tint(k):
+    return PROVINCE_TINTS[int(k) % len(PROVINCE_TINTS)]
+
+
+def province_swatch(k, tint=0.55, relief=0.11):
+    """The colour a province actually reads as on the sheet.
+
+    A legend swatch in the pure tint is a lie: the map lays that tint over
+    paper at 40 per cent and then drops a hillshade on it, so the printed
+    patch is half a shade lighter and a good deal greyer than the ink in the
+    key.  Print the blend, not the ink.
+    """
+    c = np.array(province_tint(k), dtype=np.float32)
+    p = np.array(PAPER, dtype=np.float32)
+    mixed = p * (1.0 - tint) + c * tint
+    return tuple(float(v) for v in mixed * (1.0 - relief * 0.5))
+
+
+def render_political(world, scale=2, tint=0.55, relief=0.11):
+    """A political plate: flat province washes, the relief only hinted.
+
+    A physical sheet asks the eye to read height, so the tint is a ramp and
+    the shading is loud.  A political sheet asks the eye to read *areas*, and
+    every tonal change inside a province is a distraction -- so the land is
+    laid flat and the only modelling left is a whisper of hillshade to keep
+    the paper from looking like a diagram.
+    """
+    spec = world.spec
+    hh, ww = world.height.shape
+    RW, RH = ww * scale, hh * scale
+
+    h = upsample(world.height, RW, RH)
+    hn = h / spec.meters
+    shade = hillshade(hn, z_factor=340.0 * scale, azimuth=315.0, altitude=40.0)
+
+    land_m = upsample((world.height > 0).astype(np.float32), RW, RH, Image.BILINEAR)
+    land_m = np.clip(land_m, 0.0, 1.0)
+
+    sea_rgb = bathymetric(np.maximum(-h, 0.0))
+
+    base = np.array(PAPER, dtype=np.float32)
+    land_rgb = np.ones((RH, RW, 3), dtype=np.float32) * base
+    prov = getattr(world, 'provinces', None)
+    if prov is not None:
+        flat = np.zeros((hh, ww, 3), dtype=np.float32)
+        for k in np.unique(prov):
+            if k < 0:
+                continue
+            flat[prov == k] = province_tint(k)
+        # A few per cent of the land drains to a mouth that never made the
+        # top-k list.  Left as paper those cells print as pale holes in the
+        # middle of a province, so they take a neutral land tone instead.
+        flat[prov < 0] = np.array([0.780, 0.762, 0.700], dtype=np.float32)
+        tinted = upsample_rgb(flat, RW, RH)
+        land_rgb = land_rgb * (1.0 - tint) + tinted * tint
+    land_rgb = land_rgb * (1.0 - relief + relief * shade)[..., None]
+
+    img = sea_rgb * (1.0 - land_m[..., None]) + land_rgb * land_m[..., None]
+
+    hach = coastal_hachures(blur(np.maximum(-h, 0.0), max(1.0, 2.0 * scale), passes=2),
+                            spacing=45.0, max_depth=420.0)
+    hach = hach * (1.0 - land_m)
+    img = _mix(img, np.array(INK_WATER, dtype=np.float32), hach * 0.50)
     return img, h, land_m
 
 
@@ -203,7 +286,8 @@ def _morph(mask, r, mode):
     return a
 
 
-def draw_lakes(img, world, scale=2, min_depth=6.0, min_size=4.0, colour=INK_WATER):
+def draw_lakes(img, world, scale=2, min_depth=6.0, min_size=4.0, colour=INK_WATER,
+               alpha=0.55):
     """Lakes, with the puddles dropped.
 
     The terrain is full of shallow closed basins; rendering every one of them
@@ -222,7 +306,7 @@ def draw_lakes(img, world, scale=2, min_depth=6.0, min_size=4.0, colour=INK_WATE
     RH, RW = lake.shape[0] * scale, lake.shape[1] * scale
     m = upsample(lake.astype(np.float32), RW, RH, Image.BILINEAR)
     m = np.clip(m * 1.6, 0.0, 1.0)[..., None]
-    return _mix(img, np.array(colour, dtype=np.float32) * 0.9, m * 0.55)
+    return _mix(img, np.array(colour, dtype=np.float32) * 0.9, m * alpha)
 
 
 def draw_coastline(img, land_m, scale=2, width=0.42, strength=0.88):
@@ -283,9 +367,10 @@ def draw_borders(img, region, land, scale=2, colour=(0.46, 0.30, 0.24), alpha=0.
     m = upsample(b.astype(np.float32), RW, RH, Image.BILINEAR)
     m = np.clip(m * 1.4, 0.0, 1.0)
 
-    ys, xs = np.mgrid[0:RH, 0:RW]
-    comb = ((xs + ys) % (dash + gap)) < dash
-    m = m * comb
+    if dash > 0:
+        ys, xs = np.mgrid[0:RH, 0:RW]
+        comb = ((xs + ys) % (dash + gap)) < dash
+        m = m * comb
 
     c = np.array(colour, dtype=np.float32)
     return _mix(img, c, m[..., None] * alpha)
@@ -309,7 +394,7 @@ def draw_roads(img, roads, scale=2, colour=(0.40, 0.27, 0.18), alpha=0.78, width
     return _mix(img, c, a * alpha)
 
 
-def draw_hachures(img, world, scale=2, spacing=3, colour=None, alpha=0.55,
+def draw_hachures(img, world, scale=2, spacing=4, colour=None, alpha=0.34,
                   lo_pct=68.0, hi_pct=97.0):
     """Engraved slope strokes.
 
@@ -359,14 +444,19 @@ def draw_hachures(img, world, scale=2, spacing=3, colour=None, alpha=0.55,
             if m < lo:
                 continue
             t = min((m - lo) / hi_lo, 1.0)
+            # Density, not just darkness, has to follow the slope.  An even
+            # lattice of strokes is a screen, and a screen is not an engraving:
+            # steep faces get packed with cuts, gentle ground stays open.
+            if rng.uniform() > 0.55 + 0.45 * t:
+                continue
             g = gx[y, x]
             e = gy[y, x]
             n = math.hypot(g, e)
             if n < 1e-6:
                 continue
-            length = (3.0 + 8.0 * t) * scale * 0.62 * rng.uniform(0.75, 1.25)
+            length = (2.0 + 6.0 * t) * scale * 0.62 * rng.uniform(0.75, 1.25)
             d.line([(x, y), (x - g / n * length, y - e / n * length)],
-                   fill=int(255 * (0.30 + 0.70 * t) * rng.uniform(0.80, 1.0)),
+                   fill=int(255 * (0.18 + 0.62 * t) * rng.uniform(0.80, 1.0)),
                    width=max(1, int(scale * 0.55)))
 
     a = np.asarray(mask, dtype=np.float32)[..., None] / 255.0

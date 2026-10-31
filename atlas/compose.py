@@ -7,7 +7,7 @@ import math
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import decor, render, roads as roadmod
+from . import decor, layout, render, roads as roadmod
 from .labels import build_labels, avoid
 from .naming import Namer, roman
 from .climate import BIOMES
@@ -22,47 +22,23 @@ STYLES = {
     "water": ("antiqua-italic", 0.0165, 0.12),
     "range": ("antiqua", 0.0115, 0.18),
     "river": ("antiqua-italic", 0.0095, 0.00),
-    "town": ("serif", 0.0095, 0.00),
+    "town": ("serif", 0.0108, 0.00),
 }
 
 
-def _sea_spots(land, blocks=30, count=4, separation=0.34, threshold=0.35):
-    """Open water, in map-normalised coordinates, most open first."""
-    hh, ww = land.shape
-    bh, bw = max(1, hh // blocks), max(1, ww // blocks)
-    frac = land[: bh * blocks, : bw * blocks].reshape(blocks, bh, blocks, bw).mean(axis=(1, 3))
-
-    big = 1e9
-    dist = np.where(frac > 0.10, 0.0, big)
-    ys, xs = np.mgrid[0:blocks, 0:blocks]
-    for _ in range(blocks):
-        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            sy = np.clip(ys + dy, 0, blocks - 1)
-            sx = np.clip(xs + dx, 0, blocks - 1)
-            np.minimum(dist, dist[sy, sx] + 1.0, out=dist)
-    dist[dist > big / 2] = 0.0
-
-    edge = np.minimum(np.minimum(xs, blocks - 1 - xs), np.minimum(ys, blocks - 1 - ys)) / (blocks - 1)
-    score = dist * np.clip(edge / 0.16, 0, 1) ** 0.5
-
-    spots = []
-    work = score.copy()
-    for _ in range(count):
-        j = int(np.argmax(work))
-        y, x = divmod(j, blocks)
-        if work[y, x] <= 0.6:
-            break
-        spots.append(((x + 0.5) / blocks, (y + 0.5) / blocks))
-        d = np.hypot((xs - x) / blocks, (ys - y) / blocks)
-        work[d < separation] = 0
-    return spots
+def _nice_step(span: float, target: float = 5.0) -> float:
+    """The coarsest round step that still gives about ``target`` grid lines."""
+    for step in (20.0, 10.0, 5.0, 2.0, 1.0, 0.5):
+        if span / step >= target - 0.5:
+            return step
+    return 0.5
 
 
 def _soundings(depth, count=24, rng=None):
     """Depth figures in the sea: the oldest way to make water look measured."""
     rng = rng or np.random.default_rng(0)
     hh, ww = depth.shape
-    ys, xs = np.where((depth > 20) & (depth < 340))
+    ys, xs = np.where((depth > 15) & (depth < 520))
     if len(ys) == 0:
         return []
     pick = rng.choice(len(ys), size=min(count * 8, len(ys)), replace=False)
@@ -83,22 +59,84 @@ def _measure(draw, text, fnt, tracking):
     return w, fnt.size * 1.35
 
 
-def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle=None,
-            plate=None):
+def _furniture_slots():
+    """What has to be printed on the map, in the order it gets to choose.
+
+    The cartouche goes first because it is the one piece that cannot be
+    squeezed into a gap: it needs a lake of open water.  The scale bar goes
+    last and is the most willing to sit against the frame.
+    """
+    return [
+        layout.Slot("cartouche", 0.315, 0.130,
+                    bias=[(0.27, 0.155), (0.73, 0.155), (0.27, 0.80)],
+                    bias_gain=0.50, sigma=0.24),
+        layout.Slot("elevation", 0.148, 0.185,
+                    bias=[(0.855, 0.72), (0.145, 0.72)],
+                    bias_gain=0.45, sigma=0.26),
+        layout.Slot("biome", 0.148, 0.215,
+                    bias=[(0.855, 0.455), (0.145, 0.455)],
+                    bias_gain=0.30, sigma=0.28,
+                    after=("elevation", -0.225)),
+        layout.Slot("compass", 0.115, 0.115,
+                    bias=[(0.86, 0.145), (0.14, 0.145), (0.86, 0.85)],
+                    bias_gain=0.40, sigma=0.20),
+        layout.Slot("scale", 0.230, 0.052,
+                    bias=[(0.17, 0.925), (0.83, 0.925)],
+                    bias_gain=0.50, sigma=0.24, min_open=0.55),
+    ]
+
+
+def _political_slots():
+    return [
+        layout.Slot("cartouche", 0.315, 0.130,
+                    bias=[(0.27, 0.155), (0.73, 0.155), (0.27, 0.80)],
+                    bias_gain=0.50, sigma=0.24),
+        layout.Slot("provinces", 0.205, 0.250,
+                    bias=[(0.845, 0.60), (0.155, 0.60)],
+                    bias_gain=0.45, sigma=0.26, min_open=0.72),
+        layout.Slot("compass", 0.115, 0.115,
+                    bias=[(0.86, 0.145), (0.14, 0.145), (0.86, 0.85)],
+                    bias_gain=0.40, sigma=0.20),
+        layout.Slot("scale", 0.230, 0.052,
+                    bias=[(0.17, 0.925), (0.83, 0.925)],
+                    bias_gain=0.50, sigma=0.24, min_open=0.55),
+    ]
+
+
+def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subtitle=None,
+            plate=None, framing=True, target_px=2600, mode="physical"):
     """Render one world onto a finished sheet.  Returns (page, placed labels)."""
     spec = world.spec
-    land = world.height > 0
 
-    img, h, land_m = render.render_terrain(world, scale=scale)
-    img = render.draw_hachures(img, world, scale=scale)
-    img = render.draw_borders(img, getattr(world, "provinces", None), land,
-                              scale=scale, weight=2, alpha=0.75)
-    img = render.draw_lakes(img, world, scale=scale)
-    img = render.draw_rivers(img, world, scale=scale)
-    img = render.draw_coastline(img, land_m, scale=scale)
+    if framing:
+        fr = layout.choose_frame(world.height > 0)
+        view = world.cropped(fr)
+    else:
+        fr = layout.Frame(0, 0, spec.width, spec.height)
+        view = world
 
-    hh, ww = world.height.shape
-    RW, RH = ww * scale, hh * scale
+    vspec = view.spec
+    s = int(scale) if scale else layout.fit_scale(fr, target_px)
+    land = view.height > 0
+
+    prov = getattr(view, "provinces", None)
+    if mode == "political":
+        img, h, land_m = render.render_political(view, scale=s)
+        img = render.draw_lakes(img, view, scale=s, colour=(0.42, 0.56, 0.64), alpha=0.30)
+        img = render.draw_rivers(img, view, scale=s, alpha=0.55)
+        img = render.draw_coastline(img, land_m, scale=s, strength=1.0)
+        img = render.draw_borders(img, prov, land, scale=s, weight=2, alpha=0.85,
+                                  dash=0, colour=(0.26, 0.20, 0.17))
+    else:
+        img, h, land_m = render.render_terrain(view, scale=s)
+        img = render.draw_hachures(img, view, scale=s)
+        img = render.draw_borders(img, prov, land, scale=s, weight=2, alpha=0.75)
+        img = render.draw_lakes(img, view, scale=s)
+        img = render.draw_rivers(img, view, scale=s, alpha=0.66)
+        img = render.draw_coastline(img, land_m, scale=s)
+
+    hh, ww = view.height.shape
+    RW, RH = ww * s, hh * s
     M = max(28, int(RH * margin_frac))
     PW, PH = RW + 2 * M, RH + 2 * M
 
@@ -111,88 +149,72 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
     paper_rgb = tuple(int(c * 255) for c in PAPER)
     box = (M, M, M + RW, M + RH)
 
-    aspect = spec.aspect
-    lon_span = (spec.lat_top - spec.lat_bottom) * aspect
-    lon_left = 10.0
-
     # --- furniture, placed before the names so the names can dodge it -----
-    legend_w = RW * 0.15
-    legend_box = (M + RW * 0.795, M + RH * 0.555,
-                  M + RW * 0.795 + legend_w, M + RH * 0.555 + RH * 0.180)
-    biome_box = (M + RW * 0.795, M + RH * 0.750,
-                 M + RW * 0.795 + legend_w, M + RH * 0.750 + RH * 0.215)
+    open_field = layout.openness(land)
+    spots = layout.place(_political_slots() if mode == "political" else _furniture_slots(),
+                         open_field)
 
-    def hits(a, b, pad=0.0):
-        return not (a[2] + pad < b[0] or b[2] + pad < a[0]
-                    or a[3] + pad < b[1] or b[3] + pad < a[1])
+    def to_page(b):
+        return (M + b[0] * RW, M + b[1] * RH, M + b[2] * RW, M + b[3] * RH)
 
-    spots = _sea_spots(land, count=6)
-    page_spots = [(M + sx * RW, M + sy * RH) for sx, sy in spots]
+    def to_cell(b):
+        return ((b[0] * RW) / s, (b[1] * RH) / s, (b[2] * RW) / s, (b[3] * RH) / s)
+
+    cart_box = to_page(spots["cartouche"]) if "cartouche" in spots else None
+    elev_box = to_page(spots["elevation"]) if "elevation" in spots else None
+    biome_box = to_page(spots["biome"]) if "biome" in spots else None
+    comp_box = to_page(spots["compass"]) if "compass" in spots else None
+    scale_box = to_page(spots["scale"]) if "scale" in spots else None
+    prov_box = to_page(spots["provinces"]) if "provinces" in spots else None
+
+    obstacles = [to_cell(spots[k]) for k in ("cartouche", "elevation", "biome",
+                                             "provinces", "compass", "scale")
+                 if k in spots]
 
     name = title or namer.title(namer.cultures[0])
-    sub = subtitle or f"surveyed in the year {roman(1800 + (spec.seed % 99))}"
-
-    obstacles = [tuple(v / scale for v in (legend_box[0] - M, legend_box[1] - M,
-                                           legend_box[2] - M, legend_box[3] - M)),
-                 tuple(v / scale for v in (biome_box[0] - M, biome_box[1] - M,
-                                           biome_box[2] - M, biome_box[3] - M))]
-    bar_box = (M + RW * 0.03, M + RH * 0.90, M + RW * 0.31, M + RH * 0.99)
-    obstacles.append(tuple(v / scale for v in (bar_box[0] - M, bar_box[1] - M,
-                                               bar_box[2] - M, bar_box[3] - M)))
-
-    cart_box = None
-    for cx, cy in page_spots:
-        cw, ch = RW * 0.30, RH * 0.13
-        x0 = min(max(cx - cw / 2, M + RW * 0.04), M + RW * 0.96 - cw)
-        y0 = min(max(cy - ch / 2, M + RH * 0.04), M + RH * 0.96 - ch)
-        cand = (x0, y0, x0 + cw, y0 + ch)
-        if hits(cand, legend_box, pad=RH * 0.02) or hits(cand, biome_box, pad=RH * 0.02):
-            continue
-        cart_box = cand
-        obstacles.append(tuple(v / scale for v in (x0 - M, y0 - M, x0 + cw - M, y0 + ch - M)))
-        break
-
-    compass_box = None
-    for cx, cy in page_spots:
-        r = RH * 0.050
-        cand = (cx - r * 1.5, cy - r * 1.5, cx + r * 1.5, cy + r * 1.5)
-        if cart_box and hits(cand, cart_box, pad=RH * 0.02):
-            continue
-        if hits(cand, legend_box, pad=RH * 0.02) or hits(cand, biome_box, pad=RH * 0.02):
-            continue
-        if cand[0] < M + RW * 0.02 or cand[2] > M + RW * 0.98:
-            continue
-        compass_box = cand
-        obstacles.append(tuple(v / scale for v in (cand[0] - M, cand[1] - M,
-                                                   cand[2] - M, cand[3] - M)))
-        break
+    if subtitle:
+        sub = subtitle
+    elif mode == "political":
+        sub = f"shewing the political divisions, MDCCC{roman(1 + spec.seed % 9)}"
+    else:
+        sub = f"surveyed in the year {roman(1800 + (spec.seed % 99))}"
 
     # --- names ----------------------------------------------------------
-    labels = build_labels(world, namer)
+    labels = build_labels(view, namer)
     for lb in labels:
         face, frac, track_f = STYLES[lb.kind]
         px = max(10, int(frac * RW))
         f = decor.font(face, px)
         lb.tracking = px * track_f
         wpx, hpx = _measure(draw, lb.text, f, lb.tracking)
-        lb.w, lb.h = wpx / scale, hpx / scale
+        lb.w, lb.h = wpx / s, hpx / s
 
     placed = avoid(labels, ww, hh, obstacles)
 
     # --- roads, from the towns that survived placement -------------------
     towns = [(lb.x, lb.y) for lb in placed if lb.kind == "town"]
-    paths = roadmod.build_roads(towns, world.height, land)
+    paths = roadmod.build_roads(towns, view.height, land)
     paths = [roadmod.smooth(p, window=7) for p in paths]
-    img = render.draw_roads(img, paths, scale=scale)
+    img = render.draw_roads(img, paths, scale=s)
 
-    img = render.finish_paper(img, world, scale=scale)
+    img = render.finish_paper(img, view, scale=s)
     page.paste(Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)), (M, M))
 
-    halo = max(1, int(scale * 0.8))
+    # --- rhumb lines -----------------------------------------------------
+    water = Image.new("L", page.size, 0)
+    water.paste(Image.fromarray(((view.height <= 0) * 255).astype(np.uint8))
+                .resize((ww * s, hh * s), Image.NEAREST), (M, M))
+    if comp_box:
+        page = decor.draw_rhumbs(
+            page, ((comp_box[0] + comp_box[2]) / 2, (comp_box[1] + comp_box[3]) / 2),
+            box, water, ink_soft, alpha=0.22, count=16)
+        draw = ImageDraw.Draw(page)
+
+    halo = max(1, int(s * 0.8))
 
     for lb in placed:
-        x = M + lb.x * scale
-        y = M + lb.y * scale
+        x = M + lb.x * s
+        y = M + lb.y * s
         face, frac, _ = STYLES[lb.kind]
         f = decor.font(face, max(10, int(frac * RW)))
         if lb.kind == "town":
@@ -211,54 +233,64 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
                                stroke_fill=paper_rgb)
 
     # --- soundings -------------------------------------------------------
-    depth = np.maximum(-world.height, 0.0)
+    depth = np.maximum(-view.height, 0.0)
     rng = np.random.default_rng(spec.seed * 17 + 5)
-    fs = decor.font("antiqua-italic", max(7, int(RW * 0.0028)))
-    for sx, sy, val in _soundings(depth, count=24, rng=rng):
-        px, py = M + sx * scale, M + sy * scale
+    fs = decor.font("antiqua-italic", max(11, int(RW * 0.0050)))
+    for sx, sy, val in _soundings(depth, count=44, rng=rng):
+        px, py = M + sx * s, M + sy * s
         draw.text((px, py), str(val), font=fs,
                   fill=tuple(int(c * 255) for c in INK_WATER), anchor="mm")
 
     # --- the rest of the furniture --------------------------------------
-    decor.draw_graticule(draw, box, spec.lat_top, spec.lat_bottom, lon_left,
-                         lon_left + lon_span, ink, step=10.0, alpha=0.15)
-    decor.draw_frame(draw, box, M, ink, paper_rgb)
-    decor.draw_graticule_labels(draw, box, M, spec.lat_top, spec.lat_bottom,
-                                lon_left, lon_left + lon_span, ink_soft, step=10.0,
+    lon_span = (vspec.lat_top - vspec.lat_bottom) * (ww / hh)
+    lon_left = vspec.lon_left
+    step = _nice_step(lon_span, target=5.0)
+
+    page = decor.draw_graticule(page, box, vspec.lat_top, vspec.lat_bottom, lon_left,
+                                lon_left + lon_span, ink, step=step, alpha=0.11)
+    draw = ImageDraw.Draw(page)
+    decor.draw_frame(draw, box, M, ink, paper_rgb, vspec.lat_top, vspec.lat_bottom,
+                        lon_left, lon_left + lon_span, step=step)
+    decor.draw_graticule_labels(draw, box, M, vspec.lat_top, vspec.lat_bottom,
+                                lon_left, lon_left + lon_span, ink_soft, step=step,
                                 size=max(11, int(M * 0.16)))
 
     if plate:
         fp = decor.font("antiqua-bold", max(10, int(M * 0.19)))
-        draw.text((PW - M * 0.28, M * 0.30), plate, font=fp, fill=ink_soft, anchor="ra")
+        draw.text((PW - M * 0.70, M * 0.14), plate, font=fp, fill=ink_soft, anchor="ra")
 
     if cart_box:
         decor.draw_cartouche(draw, cart_box, name, sub, ink, paper_rgb,
                              title_size=max(18, int((cart_box[3] - cart_box[1]) * 0.26)),
                              sub_size=max(10, int((cart_box[3] - cart_box[1]) * 0.13)))
-    if compass_box:
-        cx = (compass_box[0] + compass_box[2]) / 2
-        cy = (compass_box[1] + compass_box[3]) / 2
-        decor.draw_compass(draw, cx, cy, RH * 0.055, INK, PAPER)
+    if comp_box:
+        cx = (comp_box[0] + comp_box[2]) / 2
+        cy = (comp_box[1] + comp_box[3]) / 2
+        r = 0.5 * min(comp_box[2] - comp_box[0], comp_box[3] - comp_box[1]) * 0.92
+        decor.draw_compass(draw, cx, cy, r, INK, PAPER)
 
-    mid_lat = 0.5 * (spec.lat_top + spec.lat_bottom)
+    mid_lat = 0.5 * (vspec.lat_top + vspec.lat_bottom)
     km_across = lon_span * 111.0 * math.cos(math.radians(mid_lat))
     leagues_across = km_across / 5.56
     bar_w = RW * 0.20
-    leagues_shown = max(100, round(leagues_across * (bar_w / RW) / 100.0) * 100)
-    decor.draw_scale_bar(draw, M + RW * 0.05, M + RH * 0.955, bar_w, ink, paper_rgb,
-                         units=f"leagues ({leagues_shown})", segments=4,
-                         height=max(7, int(M * 0.10)))
+    leagues_shown = max(50, round(leagues_across * (bar_w / RW) / 50.0) * 50)
+    bar_x = scale_box[0] if scale_box else M + RW * 0.05
+    bar_y = scale_box[1] if scale_box else M + RH * 0.955
+    bar_h = max(7, int(M * 0.10))
+    decor.draw_scale_bar(draw, bar_x, bar_y + bar_h * 1.6, bar_w, ink, paper_rgb,
+                         units=f"leagues ({leagues_shown})", segments=4, height=bar_h)
 
-    entries = []
-    for i in range(0, len(HYPSOMETRIC) - 1, 2):
-        lo = int(HYPSOMETRIC[i][0])
-        hi = int(HYPSOMETRIC[min(i + 2, len(HYPSOMETRIC) - 1)][0])
-        entries.append((HYPSOMETRIC[i][1], f"{lo}–{hi} m"))
-    decor.draw_legend(draw, legend_box, entries[:5], ink, paper_rgb,
-                      size=max(10, int(M * 0.14)))
+    if elev_box:
+        entries = []
+        for i in range(0, len(HYPSOMETRIC) - 1, 2):
+            lo = int(HYPSOMETRIC[i][0])
+            hi = int(HYPSOMETRIC[min(i + 2, len(HYPSOMETRIC) - 1)][0])
+            entries.append((HYPSOMETRIC[i][1], f"{lo}–{hi} m"))
+        decor.draw_legend(draw, elev_box, entries[:5], ink, paper_rgb,
+                          size=max(10, int(M * 0.14)))
 
-    biome = world.biome
-    if biome is not None:
+    biome = view.biome
+    if biome is not None and biome_box:
         present = []
         for k, (bname, colour) in BIOMES.items():
             frac = float((biome == k).mean())
@@ -269,5 +301,13 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
             decor.draw_legend(draw, biome_box, [(c, n) for _f, c, n in present[:6]],
                               ink, paper_rgb, title="BIOMES",
                               size=max(9, int(M * 0.115)))
+
+    if mode == "political" and prov_box:
+        entries = [(render.province_swatch(lb.prov), lb.text)
+                   for lb in placed if lb.kind == "region" and lb.prov >= 0]
+        entries.sort(key=lambda e: e[1])
+        if entries:
+            decor.draw_legend(draw, prov_box, entries[:8], ink, paper_rgb,
+                              title="PROVINCES", size=max(9, int(M * 0.105)))
 
     return page, placed

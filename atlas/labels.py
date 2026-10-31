@@ -35,6 +35,7 @@ class Label:
     dot: bool = False
     w: float = 0.0
     h: float = 0.0
+    prov: int = -1
 
     def box(self):
         return (self.x - self.w / 2, self.y - self.h / 2,
@@ -106,22 +107,34 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
     # --- regions --------------------------------------------------------
     prov = getattr(world, "provinces", None)
     if prov is not None:
-        for j in [int(p) for p in np.unique(prov) if p >= 0]:
+        # Place the biggest province first, then let each one dodge the names
+        # already on the sheet.  Without the dodge, six provinces whose
+        # centroids happen to lie in the same latitude band stack their names
+        # into a column, and a column of capitals reads as a table of contents
+        # rather than as a map.
+        ids = [int(p) for p in np.unique(prov) if p >= 0]
+        ids.sort(key=lambda j: -int((prov == j).sum()))
+        taken: list[tuple[float, float]] = []
+        spread = (ww * 0.16) ** 2
+        for j in ids:
             ys, xs = np.where(prov == j)
             if len(ys) < 500:
                 continue
             cx, cy = float(xs.mean()), float(ys.mean())
-            # The label wants the middle of the province, but the middle is
-            # often a lake or a marsh: weight by depth inland and by proximity
-            # to the centroid, and take the best cell of both.
             d2 = (xs - cx) ** 2 + (ys - cy) ** 2
             score = inland[ys, xs] - 2.0e-5 * d2
+            for px, py in taken:
+                score = score - 0.85 * np.exp(
+                    -((xs - px) ** 2 + (ys - py) ** 2) / (2.0 * spread))
             i = int(np.argmax(score))
-            culture = cultures[j % len(cultures)]
+            if inland[int(ys[i]), int(xs[i])] < 0.10:
+                continue
+            taken.append((float(xs[i]), float(ys[i])))
+            culture = cultures[len(taken) % len(cultures)]
             labels.append(Label(
                 text=namer.place(culture, "region").upper(),
                 x=float(xs[i]), y=float(ys[i]), kind="region", size=30,
-                tracking=5.0, priority=3,
+                tracking=5.0, priority=3, prov=int(j),
             ))
     elif len(ys) > n_regions:
         pts = np.stack([xs, ys], 1).astype(np.float64)

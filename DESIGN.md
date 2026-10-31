@@ -172,9 +172,132 @@ sampling right up to the shore left a fringe of ticks standing in the water
 around every island. The sampling mask is now eroded a few pixels inland and the
 finished stroke layer is multiplied by the land mask.
 
+## 12. The sheet is cut to the country, not the country to the sheet
+
+The first composition had a fixed frame: a continent was generated into a
+landscape grid, and whatever the noise produced had to live inside it. A country
+that grew northwards had its mountains cropped; a country that grew westwards left
+an empty sea where the cartouche was supposed to go.
+
+The frame is now chosen after the land exists. `main_mass()` labels connected
+components on a quarter-resolution grid, keeps the largest, and pulls in any other
+component that is at least 55 per cent inside the frame so far — an island just off
+the coast belongs on the sheet, an islet half a world away does not, and must not
+drag the frame out to the grid edge. The frame is expanded by 16 per cent and the
+plate is rendered *from the crop*.
+
+Cropping is not slicing. `World.cropped(frame)` rebuilds everything whose meaning
+depends on the grid: the D8 receivers are flat indices into the full array, so they
+are recomputed for the crop; the latitude and longitude of the corners are remapped
+from the crop's position in the parent; climate, provinces and lake depths are
+sliced. Get this wrong and rivers reach the sea in the wrong place — the kind of
+bug that looks like art until you check.
+
+The consequence is that the sheet has no fixed aspect. Plates in the current
+edition run from 1.23 to 1.50: a tall country gets a tall plate, as it would in a
+portfolio of surveys.
+
+## 13. Furniture is a constraint problem, not a layout
+
+A cartouche placed at a constant offset from the corner is a cartouche that lands
+on a mountain half the time. Every candidate position for every piece — cartouche,
+compass, elevation key, biome key, scale bar — is now scored on four terms:
+
+```
+1.35 * openness      distance from land, on a coarse distance field
+0.45 * edge          preference for the margins
+gain * bias          the conventional position for that piece
+0.25 * separation    distance from the pieces already placed
+```
+
+Placement is greedy, largest piece first. A piece that cannot be placed at full
+size shrinks to 86 per cent and tries again, down to a floor; the biome key gets a
+second pass stacked under the elevation key before it falls back to its own bias.
+
+Two bugs came out of this. A slot with a `min_open` requirement was simply dropped
+when nothing qualified, so the scale bar vanished from a third of the plates —
+losing a piece of furniture is worse than printing it near a coast, so the solver
+keeps a fallback candidate and returns it when the requirement cannot be met. And
+the openness field is computed on a coarse grid, so the score has to be taken over
+the box, not at its centre, or a small piece lands on a cell that is half water.
+
+## 14. You cannot noise an ellipse into an island
+
+Small islands came out as eggs. The cause is wavelength: the coast noise is
+comparable in scale to the whole map, so across a forty-cell island it is
+essentially constant — and a constant offset applied to an ellipse is still an
+ellipse. A higher octave did not help; the next one was still seventy cells long.
+
+Two attempts at domain warping failed for the same reason, and the second failed
+in a way worth recording: displacement was computed as `amp * strength * noise`,
+and `strength = 0.013` on a domain of 0 to 1.47 is about six cells at plate
+resolution. Six cells on a forty-cell island is not a warp, it is a rounding error.
+
+The working fix stops pretending noise will save it and modulates the island's own
+distance field, in polar coordinates around its centre:
+
+```
+lobes = 1 + 0.34 sin(3a + 1.7i) + 0.18 sin(5a + 2.9i) + 0.10 sin(9a + 0.6i)
+r = r / lobes
+```
+
+Three harmonics with incommensurate phases give a shape with no axis of symmetry,
+which is what a real island has. It is a fake, and it looks less fake than the
+noise did.
+
+## 15. A swatch must be the colour the map actually prints
+
+The political plate lays a province tint over paper at 55 per cent and then drops a
+hillshade on it. The key originally printed the raw tint, and the two did not
+match: sampled, the key was `(164, 181, 198)` and the map under the same label was
+`(182, 183, 178)`. The eye reads that as "the key is wrong" without being able to
+say why.
+
+The swatch is now produced by the same function that paints the map, at the same
+opacity, over the same paper. It is a small thing that decides whether a plate
+looks printed or assembled.
+
+Two more, from the same plate. Land that drains to a mouth outside the top-k
+provinces had no province at all and printed as pale holes along the coast; it is
+now grown inward from labelled neighbours until none is left. And `draw_scale_bar`
+centred its units label on the end of the bar, so half of "Leagues (200)" hung
+outside the frame; right-anchored, it stays in.
+
+## 16. Blending toward white is not the same as drawing faintly
+
+The graticule was drawn by pre-blending ink toward white, `ink * a + white * (1-a)`.
+At `a = 0.10` that is a line 90 per cent white: invisible on paper-coloured land, a
+pale stripe on a blue sea — and on the first attempt, where the ink arrived as
+0–255 and was blended as if it were 0–1, very nearly black. Two bugs in one
+expression, and neither of them was "the alpha is wrong".
+
+A faint line is not a washed-out line. It is a line drawn at low opacity over
+whatever is underneath, which means an alpha channel and a composite, not
+arithmetic on the colour.
+
 ---
 
 ## Smaller decisions worth recording
+
+**The border is a measuring instrument.** A graduated chequer band outside the neat
+line, one block per degree, was the single change that made the plate read as a
+period chart instead of a modern map in old colours. It costs forty lines of code
+and does more for the illusion than the hillshade does.
+
+**Rhumb lines belong to the compass.** Sixteen rays at 22 per cent opacity,
+multiplied by the water mask so they stop at the shore. At 8 per cent they are
+invisible; at 30 they are a spiderweb. The useful range is narrow.
+
+**The index is set in two columns.** One narrow column leaves two thirds of the
+page blank and runs the list onto a second sheet for no reason.
+
+**Prose is sized to fit, by measurement.** A gazetteer page whose last paragraph
+runs off the bottom is worse than a page in smaller type, so `text_page` measures
+the column at the intended size and steps down until it clears the foot.
+
+**A political plate wants less relief, not none.** At 15 per cent the hillshade
+fights the flat wash and the provinces look like crumpled paper; at 11 it reads as
+a tint laid over ground, which is what it is.
 
 **Sea level by quantile.** Rather than tuning a threshold until the land fraction
 looks right, take the quantile of the potential that gives the requested fraction.
@@ -209,18 +332,20 @@ than a small one, so the type is fitted to the box at draw time.
 
 ## What is still wrong
 
-- Islands are smoother than they should be: the anti-fringe blur that rescues the
-  continental coastline rounds small detached landmasses into eggs.
-- Composition is fixed: the continent sits near the centre, and a continent that
-  grows westward crowds the empty sea the cartouche wanted. Nothing re-lays the
-  sheet when the land is in the way.
+- The far north has no ice cap. Latitude cools the temperature, but nothing
+  accumulates as ice, so a polar sea is drawn as open water and a polar coast is
+  drawn with the same greens as a temperate one.
+- Islands are lobed by construction, which is honest but monotonous: the same
+  three harmonics at every scale, and an archipelago reads as a family.
 - Soundings are scattered by a rule, not surveyed: a real chart thins them with
   depth and lines them up along the approach to a harbour.
 - On a long straight slope the jittered hachures can still fall into visible
   diagonal rows, because the jitter is bounded by the lattice spacing.
-- There is no inset map, no political hierarchy (every province is the same size
-  and the same kind), and no cultural layering — no capitals, no road hierarchy,
-  no difference between a village and a port.
+- There is no inset map and no political hierarchy: every province is the same
+  size and the same kind, every town the same rank, and no road is more important
+  than another.
+- The index gives one folio per name, so a river that crosses three plates is
+  listed once.
 - The naming has no grammar. Names are phonotactically consistent within a
-  province, but there is no syntax: no "Great", no "of", no rivers named after
-  towns named after saints.
+  province, but there is no syntax: no "Great", no "of", no river named after a
+  town named after a saint.

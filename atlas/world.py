@@ -51,6 +51,51 @@ class World:
     def biome(self):
         return self.climate.get("biome")
 
+    def cropped(self, frame) -> "World":
+        """A view of part of this world, as a world of its own.
+
+        The frame cuts the terrain, but it also has to cut the *drainage*: a
+        receiver is a flat index into the full grid, so a crop cannot inherit
+        the network.  It is cheaper to re-route the crop (a fraction of a
+        second) than to translate every index, and the result is a correct
+        network whose outlets are the crop's own edges.
+        """
+        from dataclasses import replace
+
+        sl = frame.slices()
+        height = self.height[sl]
+        acc = self.accumulation[sl]
+        lake = self.lake_depth[sl]
+
+        spec = self.spec
+        hh, ww = self.height.shape
+        dh = spec.lat_bottom - spec.lat_top
+        lat_top = spec.lat_top + dh * (frame.y0 / hh)
+        lat_bottom = spec.lat_top + dh * ((frame.y0 + frame.h) / hh)
+        lon_span = dh * (ww / hh) * -1.0
+        lon_left = spec.lon_left + lon_span * (frame.x0 / ww)
+
+        sub = replace(spec, width=frame.w, height=frame.h,
+                      lat_top=lat_top, lat_bottom=lat_bottom, lon_left=lon_left)
+
+        meta = {}
+        for k, v in self.meta.items():
+            if isinstance(v, np.ndarray) and v.shape == self.height.shape:
+                meta[k] = v[sl]
+            else:
+                meta[k] = v
+
+        world = World(sub, height, meta, {"accumulation": acc, "lake_depth": lake})
+        world.drainage["receivers"] = hydro.receivers(height, height > 0)[0]
+        if self.provinces is not None:
+            world.provinces = self.provinces[sl]
+        world.climate = dict(self.climate)
+        for k, v in self.climate.items():
+            if isinstance(v, np.ndarray) and v.shape == self.height.shape:
+                world.climate[k] = v[sl]
+        world.extra = self.extra
+        return world
+
 
 def _cache_key(spec: WorldSpec) -> str:
     payload = json.dumps(

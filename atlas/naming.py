@@ -18,9 +18,9 @@ import numpy as np
 ONSETS = ["b", "br", "c", "ch", "d", "dr", "f", "g", "gl", "gr", "h", "k",
           "l", "m", "n", "p", "r", "s", "sh", "sk", "st", "t", "th", "tr",
           "v", "w", "y", "z", "dh", "kh", "vr", "sv"]
-VOWELS = ["a", "e", "i", "o", "u", "ae", "ai", "au", "ei", "ia", "ou", "y"]
-CODAS = ["", "", "", "n", "r", "l", "s", "th", "m", "nd", "rk", "st", "ng",
-         "lt", "rn", "sk", "gh"]
+VOWELS = ["a", "e", "i", "o", "u", "ae", "ai", "au", "ei", "ia", "ou"]
+CODAS = ["", "", "", "", "n", "r", "l", "s", "th", "m", "nd", "rk", "st",
+         "ng", "sk", "ld", "rn"]
 
 SUFFIXES = {
     "region": ["ia", "mark", "land", "heim", "gard", "esse", "ora", "ath",
@@ -85,29 +85,41 @@ class Namer:
         for i in range(n):
             parts.append(_pick(self.rng, culture.onsets))
             parts.append(_pick(self.rng, culture.vowels))
-            if i < n - 1 or self.rng.random() < 0.55:
-                parts.append(_pick(self.rng, culture.codas))
+        # A coda closes a word.  Putting one after every syllable is what
+        # turned a three-syllable root into "Paesgriagh": each coda stacked
+        # onto the next onset until the name was mostly consonants.
+        if self.rng.random() < 0.62:
+            parts.append(_pick(self.rng, culture.codas))
         w = "".join(parts)
-        # No triple letters, no accidental double vowels at a join.
-        while "  " in w:
-            w = w.replace("  ", " ")
         if len(w) < 3:
-            w += _pick(self.rng, culture.codas) or "a"
+            w += "a"
         return w.capitalize()
 
     def place(self, culture: Culture, kind: str = "region", suffix: bool = True) -> str:
         """A name that reads as a place, not as a random string."""
         for _ in range(40):
-            base = self.word(culture)
+            # A suffixed name gets a two-syllable root, so "Svaith" + "land"
+            # stays a name and does not become a paragraph.
+            base = self.word(culture, syllables=2 if suffix else None)
             if suffix:
                 suf = _pick(self.rng, culture.suffixes[kind])
                 # Join cleanly: drop a trailing vowel before a vowel suffix.
                 if base[-1].lower() in "aeiouy" and suf[0].lower() in "aeiouy":
                     base = base[:-1]
+                elif base[-1].lower() == suf[0].lower():
+                    base = base[:-1]
+                # "Vark" + "gard" is a three-consonant pile-up.  Drop the coda
+                # when the suffix begins with a consonant of its own.
+                if suf[0].lower() not in "aeiouy":
+                    while (len(base) > 2 and base[-1].lower() not in "aeiouy"
+                           and base[-2].lower() not in "aeiouy"):
+                        base = base[:-1]
                 name = base + suf
             else:
                 name = base
             name = name.capitalize()
+            if len(name) > 13:
+                continue
             if name not in self._used:
                 self._used.add(name)
                 return name

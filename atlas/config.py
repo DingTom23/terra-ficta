@@ -43,6 +43,7 @@ class WorldSpec:
     # --- climate --------------------------------------------------------
     lat_top: float = 58.0      # degrees north at the top edge
     lat_bottom: float = 12.0   # degrees north at the bottom edge
+    lon_left: float = 10.0     # degrees east at the left edge
     wind_azimuth: float = 250.0  # prevailing wind, degrees clockwise from N
 
     # --- presentation ---------------------------------------------------

@@ -26,14 +26,16 @@ COLOPHON = [
 ]
 
 
-def render_sheet(seed: int, width: int = 1400, height: int = 950, scale: int = 2,
-                 title: str | None = None, plate: str | None = None, verbose: bool = True):
+def render_sheet(seed: int, width: int = 1400, height: int = 950, scale: int = 0,
+                 title: str | None = None, plate: str | None = None,
+                 mode: str = "physical", verbose: bool = True):
     spec = WorldSpec(seed=seed, width=width, height=height)
     t0 = time.time()
     world = build_world(spec)
     t1 = time.time()
     namer = Namer(seed)
-    page, labels = compose(world, namer, scale=scale, title=title, plate=plate)
+    page, labels = compose(world, namer, scale=scale or None, title=title, plate=plate,
+                           mode=mode)
     t2 = time.time()
     if verbose:
         print(f"  seed {seed:>5}  terrain {t1 - t0:5.1f}s  ink {t2 - t1:5.1f}s  "
@@ -51,7 +53,8 @@ def main(argv=None):
                     help="a range, e.g. 1-8, or a comma list 3,7,11")
     ap.add_argument("--width", type=int, default=1400, help="terrain grid width")
     ap.add_argument("--height", type=int, default=950, help="terrain grid height")
-    ap.add_argument("--scale", type=int, default=2, help="output pixels per grid cell")
+    ap.add_argument("--scale", type=int, default=0,
+                    help="output pixels per grid cell (0 = sized to the plate)")
     ap.add_argument("--title", type=str, default=None)
     ap.add_argument("--out", type=str, default=None, help="output PNG path")
     ap.add_argument("--outdir", type=str, default="out", help="directory for output")
@@ -60,6 +63,8 @@ def main(argv=None):
     ap.add_argument("--pdf", type=str, default=None, help="alias for --book")
     ap.add_argument("--gallery", action="store_true", help="write an index.html gallery")
     ap.add_argument("--viewer", action="store_true", help="write an interactive viewer.html")
+    ap.add_argument("--political", action="store_true",
+                    help="also draw a political plate for every world")
     args = ap.parse_args(argv)
 
     outdir = Path(args.outdir)
@@ -69,23 +74,50 @@ def main(argv=None):
     sheets = []
     cards = []
     viewer_items = []
+    n_plates = len(seeds) * (2 if args.political else 1)
+    counter = [0]
+
+    def next_plate():
+        counter[0] += 1
+        return f"PLATE {roman(counter[0])}" if n_plates > 1 else None
+
     for i, seed in enumerate(seeds):
-        plate = f"PLATE {roman(i + 1)}" if len(seeds) > 1 else None
+        pnum = next_plate()
         world, namer, page, labels = render_sheet(
             seed, args.width, args.height, args.scale,
-            args.title if len(seeds) == 1 else None, plate=plate)
+            args.title if len(seeds) == 1 else None, plate=pnum)
 
         path = Path(args.out) if (args.out and len(seeds) == 1) else outdir / f"atlas_{seed:04d}.png"
         page.save(path)
         print(f"  -> {path}")
 
+        pol_page = None
+        pol_num = None
+        if args.political:
+            pol_num = next_plate()
+            _, _, pol_page, _ = render_sheet(
+                seed, args.width, args.height, args.scale, None,
+                plate=pol_num, mode="political")
+            ppath = outdir / f"atlas_{seed:04d}_political.png"
+            pol_page.save(ppath)
+            print(f"  -> {ppath}")
+
         title, subtitle, paras = gazetteer.describe(
             world, labels, namer.title(namer.cultures[0]))
-        sheets.append((plate, page, title, subtitle, paras, labels))
+        sheets.append(dict(plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
+                           title=title, subtitle=subtitle, paras=paras, labels=labels))
         cards.append((path, title, subtitle, paras))
         viewer_items.append({"image": path.name, "title": title,
                              "subtitle": subtitle, "paras": paras,
-                             "plate": plate or ""})
+                             "plate": pnum or ""})
+        if pol_page is not None:
+            pcards = (ppath, title + " — political", subtitle,
+                      "The same country drawn for the reader who wants the shape of its "
+                      "provinces rather than the shape of its hills.")
+            cards.append(pcards)
+            viewer_items.append({"image": ppath.name, "title": title,
+                                 "subtitle": subtitle, "paras": [pcards[3]],
+                                 "plate": pol_num or ""})
 
     if args.gallery:
         _write_gallery(outdir / "index.html", cards)
@@ -108,7 +140,7 @@ def main(argv=None):
 
 
 def _assemble_book(sheets, seeds):
-    size = sheets[0][1].size
+    size = book.PAGE
     pages = []
     pages.append(book.title_page(size, "Atlas", "countries that were never surveyed",
                                  roman(1800 + (seeds[0] % 99)), len(sheets)))
@@ -116,18 +148,26 @@ def _assemble_book(sheets, seeds):
 
     contents = []
     index = {}
-    for i, (plate, page, title, subtitle, paras, labels) in enumerate(sheets):
-        num = roman(i + 1)
-        folio = 4 + 2 * i
-        contents.append((num, title, folio))
-        for lb in labels:
+    folio = 3
+    for sheet in sheets:
+        folio += 1
+        contents.append((sheet["plate"] or "", sheet["title"], folio))
+        if sheet.get("pol_page") is not None:
+            folio += 1
+            contents.append((sheet["pol_plate"] or "", sheet["title"] + " — political", folio))
+        folio += 1
+        num = (sheet["plate"] or "").replace("PLATE ", "") or "I"
+        for lb in sheet["labels"]:
             index.setdefault(lb.text.title(), num)
     pages.append(book.contents_page(size, contents))
 
-    for plate, page, title, subtitle, paras, labels in sheets:
-        pages.append(page)
-        pages.append(gazetteer.text_page(title, subtitle, paras, size=size,
-                                         seed=sum(ord(c) for c in title) % 1000))
+    for sheet in sheets:
+        pages.append(book.place_plate(sheet["page"]))
+        if sheet.get("pol_page") is not None:
+            pages.append(book.place_plate(sheet["pol_page"]))
+        pages.append(gazetteer.text_page(sheet["title"], sheet["subtitle"], sheet["paras"],
+                                         size=size,
+                                         seed=sum(ord(c) for c in sheet["title"]) % 1000))
 
     entries = sorted(index.items(), key=lambda kv: kv[0].lower())
     pages.extend(book.index_pages(size, entries))
