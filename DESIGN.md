@@ -39,8 +39,7 @@ had no downhill neighbour than at the start. It diverges.
 
 The spill level of a basin is known the moment its rim is reached. That means the
 right algorithm is ordered, not iterative: a priority flood. Implemented with a
-bucket queue over quantised heights, it is O(N), needs no heap, and takes 1.8 s
-for 540 000 cells:
+bucket queue over quantised heights, it is O(N) and takes 1.8 s for 540 000 cells:
 
 ```
 fill 1.8s  raised=14791  norecv=0  maxacc=36652
@@ -48,6 +47,21 @@ fill 1.8s  raised=14791  norecv=0  maxacc=36652
 
 Zero cells without a receiver, and the largest drainage basin went from 1 822
 cells to 36 652 — from a rash of puddles to a river system.
+
+**The bucket queue needs a heap inside each bucket.** My first version kept a
+plain list per bucket and popped with `bucket.pop()`, which is last-in-first-out.
+Cells that landed in the same bucket then expanded in the order they were pushed
+rather than the order of their heights, and a cell could keep an overfill. The
+error is bounded by one bucket width — invisible when the field is stored in
+metres and the bucket is half a millimetre — but it is still wrong, and it showed
+up the moment the same code was tested on a 0–1 field: 0.04–0.06 m of error over
+4–22 cells, and 2–4 cells choosing a different receiver.
+
+The proof that a bucket index never decreases is one line: a pushed cell has
+`v ≥ filled[i] + eps`, so `level(v) ≥ level(filled[i])`. Given that, a heap
+inside each bucket makes the global pop order exactly non-decreasing, and the
+result becomes bit-identical to a textbook heap flood. `tests/test_hydro.py`
+asserts that equality on five seeds.
 
 ## 3. Stream power terraces; blurred carving does not
 
@@ -312,6 +326,68 @@ sixty-four rows onto a page regardless of how tall the type was, so the folios
 collided with the names. All three are failures of a page describing something
 other than what was printed — the kind of error a reader finds in ten seconds
 and the generator never reports.
+
+---
+
+## 19. The cache is part of the model
+
+The world cache was the source of two bugs that looked like renderer bugs, and
+both had the same shape: **the cache knew less than the world did.**
+
+The first: `_cache_key` hashed a hand-written list of `WorldSpec` fields, so
+adding a dial meant editing the key or silently reusing a stale world. Editing
+`terrain.py` changed nothing for twenty minutes because the npz still held the old
+continent — the render printed `terrain 0.2s` and I believed it. The fix is to
+hash `asdict(spec)` and ignore only what is presentation (`name`, `title`,
+`style`, `projection`, `supersample`, `extra`). The failure mode then becomes a
+needless rebuild instead of a wrong world, which is the right way round: a cache
+should be allowed to be slow, never to be wrong.
+
+The second: the cache stored one field of meta (`relief`) and the loader rebuilt
+the dict as `{"relief": relief}`. But `labels.py` reads `world.meta["inland"]`.
+A cold world and a warm world therefore laid out different labels from the same
+seed — the same country, named differently depending on whether it had been built
+before. The fix stores every array as `meta_<key>` and everything else as JSON,
+and rebuilds the whole dict on load.
+
+One more, quieter: `accumulation` and `lake_depth` were computed in float64 and
+cast to float32 only on the way into the cache, so a cold world held float64 and a
+warm one float32. Cast at the source instead. `tests/test_world.py` now asserts
+that a warm world equals a cold one array by array, and that the labels match too.
+
+## 20. Measure the country before describing it
+
+The gazetteer used to say "the longest river" about `rivers[0]`, "the largest
+town" about `towns[0]` and "the most remote" about `towns[-1]`. All three were
+just the first and last entries in a list built in raster order, which is to say
+they were the topmost and bottommost, and the prose was decoration over an
+unmeasured world.
+
+`atlas/features.py` measures instead. Rivers are traced downstream through the
+D8 receivers and upstream by taking, at each step, the neighbour that drains into
+the current cell with the largest accumulation — the main stem, not any branch.
+Length is summed in kilometres, with the east-west scale corrected by
+`cos(mid_latitude)`; drained area comes from the accumulation at the mouth. Towns
+get their rank from the label and their distance to the nearest other town. A
+range "carries the highest" only if the peak actually falls inside it.
+
+The prose then has nothing to invent. Every number in it is a number the world
+produced, and `tests/test_consistency.py` checks that the river called longest is
+the one `longest_river()` returns, printed with its measured length.
+
+## 21. One province, one language
+
+Towns were given `cultures[i % len(cultures)]` by their index in the town list,
+and province names used a third index — the count of names already taken. So a
+village spoke a language unrelated to the province it stood in, and the province
+name matched neither. Nothing about the map looked wrong; it was only wrong if you
+read it.
+
+The rule is now stated once and tested: **everything inside province `j` speaks
+culture `j`.** `_culture_index` returns the index, never the object, because
+`cultures.index(culture)` silently returns the first equal culture and two
+provinces can generate identical phonologies. `Label.culture` records the index so
+the invariant is checkable rather than merely intended.
 
 ---
 

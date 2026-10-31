@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import decor
+from . import decor, features
 from .palette import PAPER, INK, INK_SOFT
 
 
@@ -19,71 +19,106 @@ def _article(word: str) -> str:
     return "an" if word[:1].lower() in "aeiou" else "a"
 
 
+def _count(value, step=3):
+    """A measured quantity, rounded to `step` places and grouped: 3,654,000."""
+    return f"{int(round(value, -step)):,}"
+
+
 def describe(world, labels, name: str):
-    """Return (title, subtitle, paragraphs) for one sheet."""
+    """Return (title, subtitle, paragraphs) for one sheet.
+
+    Every claim below is measured in `features` before it is written.  The
+    prose used to call the first river in a list "the longest" and the last
+    town "the most remote" without computing either; a sentence that happens
+    to be true is indistinguishable from one that is not.
+    """
     spec = world.spec
     land = world.height > 0
-    h = world.height
+    feats = features.measure(world, labels)
 
-    regions = _unique(lb.text.title() for lb in labels if lb.kind == "region")
-    seas = _unique(lb.text.title() for lb in labels if lb.kind == "water")
-    ranges = _unique(lb.text.title() for lb in labels if lb.kind == "range")
-    rivers = _unique(lb.text.title() for lb in labels if lb.kind == "river")
-    towns = _unique(lb.text.title() for lb in labels if lb.kind == "town")
+    seas = [lb for lb in labels if lb.kind == "water"]
+    provinces = sorted(feats.provinces, key=lambda p: -p.area_km2)
+    rivers = sorted(feats.rivers, key=lambda r: -r.length_km)
 
-    peak = float(h.max())
+    peak = feats.peak_m
     lake_cells = int((world.lake_depth > 6).sum())
     lat_top, lat_bot = spec.lat_top, spec.lat_bottom
+    share = int(round(float(land.mean()) * 100))
 
     paras = []
     opening = (
         f"{name.title()} lies between the {int(lat_bot)}th and {int(lat_top)}th parallels, "
-        f"and holds {int(land.mean() * 100)} parts land to {100 - int(land.mean() * 100)} of water."
+        f"and holds {share} parts land to {100 - share} of water."
     )
     if seas:
-        opening += f" The {seas[0]} breaks upon its western shore"
-        if len(seas) > 1:
-            opening += f", and the {seas[1]} closes it to the east"
+        # Which shore a sea breaks upon is a fact about where the label sits,
+        # not about the order the labels were made in.
+        cx = float(np.where(land)[1].mean())
+        west = [lb for lb in seas if lb.x < cx]
+        east = [lb for lb in seas if lb.x > cx]
+        if west:
+            opening += f" The {west[0].text.title()} breaks upon its western shore"
+            if east:
+                opening += f", and the {east[0].text.title()} closes it to the east"
+        elif east:
+            opening += f" The {east[0].text.title()} lies off its eastern shore"
+        else:
+            opening += f" The {seas[0].text.title()} lies off its coast"
         opening += "."
     paras.append(opening)
 
-    relief = f"The ground rises to {int(round(peak, -2))} metres."
-    if ranges:
-        relief += f" The {ranges[0]}"
-        if len(ranges) > 1:
-            relief += f" and the {ranges[1]}"
-        relief += " carry the highest of it, and the waters that leave them run clear to the sea."
+    relief = f"The ground rises to {_count(peak, 0)} metres."
+    top = feats.highest_range()
+    if top is not None:
+        if top.holds_peak:
+            relief += f" The {top.name.title()} carry the highest of it."
+        else:
+            relief += (f" The {top.name.title()} are the highest ground the survey names, "
+                       f"reaching {_count(top.high_m, 0)} metres.")
     paras.append(relief)
 
     if rivers:
-        body = f"The {rivers[0]} is the longest of the rivers shown"
-        others = [r for r in rivers[1:] if r != rivers[0]]
-        if others:
-            body += f", with the {others[0]}"
-            if len(others) > 1:
-                body += f" and the {others[1]}"
-            body += " among its tributaries"
-        body += "."
+        first = rivers[0]
+        where = "the sea" if first.reaches_sea else "the marshes"
+        body = (f"The {first.name.title()} is the longest of the rivers shown, "
+                f"{_count(first.length_km, 1)} kilometres from its source to {where}.")
+        if len(rivers) > 1:
+            second = rivers[1]
+            body += (f" The {second.name.title()} is next at "
+                     f"{_count(second.length_km, 1)} kilometres, draining "
+                     f"{_count(second.drained_km2)} square kilometres.")
         if lake_cells > 400:
             body += (f" Lakes take up {lake_cells / max(land.sum(), 1) * 100:.1f} parts in a "
                      "hundred of the land, most of them strung along the greater courses.")
         paras.append(body)
 
-    if regions:
-        body = "The country is divided into "
-        if len(regions) == 1:
-            body += f"the single province of {regions[0]}"
-        elif len(regions) == 2:
-            body += f"{regions[0]} and {regions[1]}"
+    if provinces:
+        if len(provinces) == 1:
+            body = f"The country is the single province of {provinces[0].name.title()}"
+        elif len(provinces) == 2:
+            body = (f"The country is divided between {provinces[0].name.title()} "
+                    f"and {provinces[1].name.title()}")
         else:
-            body += ", ".join(regions[:-1]) + f" and {regions[-1]}"
-        body += "."
-        if towns:
-            body += f" Of the towns, {towns[0]} is the largest and {towns[-1]} the most remote."
+            names = [p.name.title() for p in provinces]
+            body = "The country is divided into " + ", ".join(names[:-1]) + f" and {names[-1]}"
+        big = provinces[0]
+        body += (f", of which {big.name.title()} is the largest at "
+                 f"{_count(big.area_km2)} square kilometres.")
+        chief = feats.chief_town()
+        remote = feats.remotest_town()
+        if chief is not None:
+            body += f" The seat is at {chief.name.title()}"
+            if remote is not None and remote is not chief:
+                body += (f", and {remote.name.title()} stands furthest from its neighbours, "
+                         f"{_count(remote.nearest_km, 0)} kilometres.")
+            else:
+                body += "."
         body += " No part of this country has been visited twice."
         paras.append(body)
 
-    return name.title(), f"a survey of the country, in {max(len(regions), 1)} provinces", paras
+    return (name.title(),
+            f"a survey of the country, in {max(len(provinces), 1)} provinces",
+            paras)
 
 
 def _unique(items):
@@ -143,7 +178,11 @@ def text_page(title, subtitle, paragraphs, size=(1600, 2000), seed=0):
             y += lead
         y += gap
 
-    draw.text((w / 2, h - margin * 0.26), "— finis —", font=fs, fill=soft, anchor="mm")
+    # "finis" belongs at the end of the text, not at the foot of the page: a
+    # short survey leaves half a page of air, and a rule at the bottom of it
+    # reads as a printing error rather than a full stop.
+    y = min(y + gap * 0.2, h - margin * 0.30)
+    draw.text((w / 2, y), "— finis —", font=fs, fill=soft, anchor="mm")
     return page
 
 

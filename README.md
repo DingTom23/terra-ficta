@@ -134,18 +134,45 @@ atlas/
   decor.py       frame, graticule, compass, scale bar, cartouche, legend
   naming.py      invented phonologies and toponymy
   labels.py      feature extraction and label placement
+  features.py    measuring the country: rivers, towns, ranges, provinces
   compose.py     the finished sheet
-  gazetteer.py   prose
+  gazetteer.py   prose, written from the measurements
   book.py        front matter, contents, index
   web.py         the static viewer
   cli.py         command line
+tests/           the invariants the book depends on
 tools/           development benches used while building this
 out/             results
 cache/           generated worlds, keyed by a hash of the spec
 ```
 
 The cache is safe to delete. It exists so that re-inking a world does not mean
-recomputing its rivers.
+recomputing its rivers. It is keyed on every dial in `WorldSpec` that can change
+the terrain, and on nothing that is merely presentation — so a new dial is
+covered by default, and the worst a stale key can do is cost you a rebuild.
+
+---
+
+## Tests
+
+```bash
+python -m tests
+```
+
+No test framework, just a runner that finds `test_*` functions. What is checked
+is not "does it run" but the claims the book makes about the world:
+
+- the bucket-queue flood is **bit-identical** to a textbook heap flood, and the
+  filled surface has no interior pit;
+- a warm cache produces the same world as a cold one, array by array, and lays
+  out the same labels;
+- every province that is tinted on the plate is also named on it;
+- every town speaks the language of the province it stands in;
+- the river the prose calls longest is the one the measurement returns, printed
+  with its measured length;
+- a crop re-routes with its depressions filled, so no channel ends in mid-air;
+- the title page counts plates, not countries, and the index never runs off the
+  foot of the page.
 
 ---
 
@@ -181,5 +208,9 @@ Still wrong, and known to be wrong:
 - Region names are now compulsory, but on about one seed in six a province
   still finds nowhere to write: it is then tinted on the plate and missing from
   the key, which is the one inconsistency a reader will actually notice.
-- The gazetteer is generated from the same statistics that drew the map, so it
-  can describe a country accurately and still tell you nothing about it.
+- The gazetteer measures what it describes — lengths, areas, distances, which
+  range holds the peak — but a survey is not a story. It can tell you the
+  Skoskogei runs 2 910 kilometres and still not tell you what it is like to
+  stand on its bank.
+- Nothing in the book is written by a person, including the colophon, which is
+  the one place a person ought to be speaking.

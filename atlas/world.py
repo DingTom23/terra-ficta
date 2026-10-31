@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +23,9 @@ from .terrain import build_base, add_detail
 from . import climate, hydro, regions
 
 CACHE_DIR = Path(__file__).resolve().parents[1] / "cache"
+
+# Presentation only: changing these must not rebuild the terrain.
+_CACHE_IGNORE = {"name", "title", "style", "projection", "supersample", "extra"}
 
 
 @dataclass
@@ -34,6 +37,7 @@ class World:
     climate: dict = field(default_factory=dict)
     provinces: np.ndarray | None = None
     extra: dict = field(default_factory=dict)
+    _crops: dict = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def land(self):
@@ -62,6 +66,10 @@ class World:
         """
         from dataclasses import replace
 
+        key = (frame.x0, frame.y0, frame.w, frame.h)
+        if key in self._crops:
+            return self._crops[key]
+
         sl = frame.slices()
         height = self.height[sl]
         acc = self.accumulation[sl]
@@ -86,7 +94,14 @@ class World:
                 meta[k] = v
 
         world = World(sub, height, meta, {"accumulation": acc, "lake_depth": lake})
-        world.drainage["receivers"] = hydro.receivers(height, height > 0)[0]
+        # Re-route, but fill first: receivers computed on the raw crop leave a
+        # pit wherever a basin was only filled in the parent, and a pit is a
+        # channel that ends in mid-air -- which is how a 2 700 km river came to
+        # be described as 40 km long.  The accumulation is deliberately *not*
+        # recomputed: a river entering the frame is already carrying its whole
+        # catchment, and restarting the count at the neat line would thin it.
+        filled = hydro.fill_depressions(height)
+        world.drainage["receivers"] = hydro.receivers(filled, height > 0)[0]
         if self.provinces is not None:
             world.provinces = self.provinces[sl]
         world.climate = dict(self.climate)
@@ -94,28 +109,48 @@ class World:
             if isinstance(v, np.ndarray) and v.shape == self.height.shape:
                 world.climate[k] = v[sl]
         world.extra = self.extra
+        self._crops[key] = world
         return world
 
 
 def _cache_key(spec: WorldSpec) -> str:
-    payload = json.dumps(
-        {
-            "seed": spec.seed,
-            "width": spec.width,
-            "height": spec.height,
-            "land": round(spec.land_fraction, 4),
-            "blobs": spec.blobs,
-            "islands": spec.island_blobs,
-            "coast": round(spec.coast_noise, 4),
-            "ridges": spec.ridge_count,
-            "mamp": round(spec.mountain_amp, 4),
-            "carve": round(spec.carve_depth, 2),
-            "detail": round(spec.detail, 4),
-            "meters": round(spec.meters, 2),
-        },
-        sort_keys=True,
-    )
-    return hashlib.sha1(payload.encode()).hexdigest()[:16]
+    """Everything that can change the cached arrays, and nothing else.
+
+    This used to be a hand-written list, which quietly omitted ``coast_freq``,
+    ``ridge_width``, ``mountain_freq``, ``relief_bias`` and ``provinces``: two
+    worlds that differed in those dials shared a cache entry.  Listing the
+    fields that are *ignored* instead means a new dial is covered by default --
+    the failure mode is a needless rebuild, not a wrong world.
+    """
+    payload = {}
+    for key, value in asdict(spec).items():
+        if key in _CACHE_IGNORE:
+            continue
+        payload[key] = round(value, 6) if isinstance(value, float) else value
+    return hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def _pack_meta(meta) -> dict:
+    """Flatten a meta dict into npz entries: arrays as arrays, the rest as JSON."""
+    packed = {}
+    plain = {}
+    for key, value in meta.items():
+        if isinstance(value, np.ndarray):
+            packed[f"meta_{key}"] = value
+        else:
+            plain[key] = value
+    packed["meta_json"] = np.array(json.dumps(plain))
+    return packed
+
+
+def _load_meta(z) -> dict:
+    meta = {}
+    if "meta_json" in z.files:
+        meta.update(json.loads(str(z["meta_json"])))
+    for key in z.files:
+        if key.startswith("meta_"):
+            meta[key[len("meta_"):]] = z[key]
+    return meta
 
 
 def build_world(spec: WorldSpec, use_cache: bool = True) -> World:
@@ -129,9 +164,10 @@ def build_world(spec: WorldSpec, use_cache: bool = True) -> World:
             acc = z["accumulation"]
             lake = z["lake_depth"]
             rec = z["receivers"]
-            relief = z["relief"] if "relief" in z else None
             prov = z["provinces"] if "provinces" in z else None
-        meta = {"relief": relief} if relief is not None else {}
+            # The whole meta dict, not just relief: labels place themselves by
+            # `inland`, and a warm cache used to fall back to a different field.
+            meta = _load_meta(z)
         drainage = {"accumulation": acc, "lake_depth": lake, "receivers": rec}
         world = World(spec, height, meta, drainage)
         world.provinces = prov
@@ -146,17 +182,21 @@ def build_world(spec: WorldSpec, use_cache: bool = True) -> World:
     height = add_detail(spec, carved).astype(np.float32)
 
     dr = hydro.drainage(height)
+    # Cast here, not at the save call: the cache stores float32, so a cold world
+    # and a warm one must hold float32 too or the two disagree in the last bits.
+    dr["accumulation"] = dr["accumulation"].astype(np.float32)
+    dr["lake_depth"] = dr["lake_depth"].astype(np.float32)
     prov, _mouths = regions.provinces(height, dr["receivers"], k=spec.provinces, seed=spec.seed)
 
     if use_cache:
         np.savez_compressed(
             path,
             height=height,
-            accumulation=dr["accumulation"].astype(np.float32),
-            lake_depth=dr["lake_depth"].astype(np.float32),
+            accumulation=dr["accumulation"],
+            lake_depth=dr["lake_depth"],
             receivers=dr["receivers"],
-            relief=meta["relief"],
             provinces=prov,
+            **_pack_meta(meta),
         )
 
     world = World(spec, height, meta, dr)

@@ -25,7 +25,7 @@ def main():
     print(f"world   {time.time() - t0:6.2f}s")
 
     t0 = time.time()
-    page, labels = compose(world, Namer(SEED), scale=2)
+    page, labels, view = compose(world, Namer(SEED), scale=2)
     print(f"compose {time.time() - t0:6.2f}s  {page.size}  labels {len(labels)}")
 
     out = Path(__file__).resolve().parents[1] / "out" / f"sheet_{SEED}.png"

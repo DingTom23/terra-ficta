@@ -34,13 +34,13 @@ def render_sheet(seed: int, width: int = 1400, height: int = 950, scale: int = 0
     world = build_world(spec)
     t1 = time.time()
     namer = Namer(seed)
-    page, labels = compose(world, namer, scale=scale or None, title=title, plate=plate,
-                           mode=mode)
+    page, labels, view = compose(world, namer, scale=scale or None, title=title,
+                                 plate=plate, mode=mode)
     t2 = time.time()
     if verbose:
         print(f"  seed {seed:>5}  terrain {t1 - t0:5.1f}s  ink {t2 - t1:5.1f}s  "
               f"{page.size[0]}x{page.size[1]}")
-    return world, namer, page, labels
+    return view, namer, page, labels
 
 
 def _title_for(seed: int, override: str | None = None) -> str:
@@ -98,7 +98,7 @@ def main(argv=None):
     for i, seed in enumerate(seeds):
         pnum = next_plate()
         name = _title_for(seed, args.title if len(seeds) == 1 else None)
-        world, namer, page, labels = render_sheet(
+        view, namer, page, labels = render_sheet(
             seed, args.width, args.height, args.scale, name, plate=pnum)
 
         path = Path(args.out) if (args.out and len(seeds) == 1) else outdir / f"atlas_{seed:04d}.png"
@@ -116,7 +116,7 @@ def main(argv=None):
             pol_page.save(ppath)
             print(f"  -> {ppath}")
 
-        title, subtitle, paras = gazetteer.describe(world, labels, name)
+        title, subtitle, paras = gazetteer.describe(view, labels, name)
         sheets.append(dict(plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
                            title=title, subtitle=subtitle, paras=paras, labels=labels))
         cards.append((path, title, subtitle, paras))
@@ -152,10 +152,15 @@ def main(argv=None):
     return 0
 
 
+def _plate_count(sheets) -> int:
+    """How many plates the book actually contains, not how many countries."""
+    return sum(1 + (1 if s.get("pol_page") is not None else 0) for s in sheets)
+
+
 def _assemble_book(sheets, seeds):
     size = book.PAGE
     pages = []
-    n_plates = sum(1 + (1 if s.get("pol_page") is not None else 0) for s in sheets)
+    n_plates = _plate_count(sheets)
     pages.append(book.title_page(size, "Terra Ficta", "countries that were never surveyed",
                                  roman(1800 + (seeds[0] % 99)), n_plates))
     pages.append(book.colophon_page(size, COLOPHON))

@@ -115,7 +115,13 @@ def _political_slots():
 
 def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subtitle=None,
             plate=None, framing=True, target_px=2600, mode="physical"):
-    """Render one world onto a finished sheet.  Returns (page, placed labels)."""
+    """Render one world onto a finished sheet.
+
+    Returns (page, placed labels, view).  The view is the cropped world the
+    labels were laid out on, and it is the one the text must describe: label
+    coordinates are frame coordinates, so measuring them against the uncropped
+    grid silently reports the wrong river, the wrong province, the wrong peak.
+    """
     spec = world.spec
 
     if framing:
@@ -369,4 +375,4 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
             decor.draw_legend(draw, prov_box, entries[:8], ink, paper_rgb,
                               title="PROVINCES", size=max(9, int(M * 0.105)))
 
-    return page, placed
+    return page, placed, view

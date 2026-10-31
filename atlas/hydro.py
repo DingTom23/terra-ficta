@@ -23,6 +23,8 @@ Pipeline
 
 from __future__ import annotations
 
+import heapq
+
 import numpy as np
 
 from .filters import blur
@@ -96,6 +98,10 @@ def fill_depressions(h, eps=EPS, levels=8192):
 
     filled = flat.copy()
     closed = np.zeros(n, dtype=bool)
+    # A bucket holds every cell whose water level quantises to the same step.
+    # Within a bucket the order must still be by true level, or a cell can be
+    # expanded from a higher rim than its own and keep the overfill: the bucket
+    # is therefore a heap, and only the bucket index is quantised.
     buckets = [[] for _ in range(levels)]
 
     def level(v):
@@ -109,7 +115,7 @@ def fill_depressions(h, eps=EPS, levels=8192):
     ])
     for i in np.unique(seed):
         closed[i] = True
-        buckets[level(flat[i])].append(i)
+        heapq.heappush(buckets[level(flat[i])], (flat[i], i))
 
     ptr = 0
     while ptr < levels:
@@ -117,7 +123,7 @@ def fill_depressions(h, eps=EPS, levels=8192):
         if not bucket:
             ptr += 1
             continue
-        i = bucket.pop()
+        i = heapq.heappop(bucket)[1]
         y, x = divmod(i, W)
         base = filled[i] + eps
         for dy in (-1, 0, 1):
@@ -137,7 +143,7 @@ def fill_depressions(h, eps=EPS, levels=8192):
                 closed[j] = True
                 v = base if base > flat[j] else flat[j]
                 filled[j] = v
-                buckets[level(v)].append(j)
+                heapq.heappush(buckets[level(v)], (v, j))
     return filled.reshape(H, W)
 
 

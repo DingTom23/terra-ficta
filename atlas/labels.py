@@ -36,6 +36,7 @@ class Label:
     w: float = 0.0
     h: float = 0.0
     prov: int = -1
+    culture: int = -1
     capital: bool = False
     rank: int = 2
     flip: bool = False
@@ -78,6 +79,19 @@ def _snap(ys, xs, mask, weights):
     w = weights[ys, xs]
     i = int(np.argmax(w))
     return float(xs[i]), float(ys[i])
+
+
+def _culture_index(prov, cultures, x, y, fallback=0):
+    """Index of the culture of the province containing (x, y).
+
+    One country, one language per province: the province name, its towns and
+    its rivers are all drawn from the same phonology.  Where there is no
+    province grid the fallback index keeps the choice deterministic.
+    """
+    if prov is None:
+        return fallback % len(cultures)
+    p = int(prov[int(y), int(x)])
+    return (p if p >= 0 else fallback) % len(cultures)
 
 
 def _river_angle(rec, x, y, ww, steps=12):
@@ -148,11 +162,13 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
                 if inland[int(ys[i]), int(xs[i])] < 0.02:
                     continue
             taken.append((float(xs[i]), float(ys[i])))
-            culture = cultures[len(taken) % len(cultures)]
+            # The province's own id picks its language, not the order it was
+            # named in: everything inside province j must speak culture j.
+            culture = cultures[int(j) % len(cultures)]
             labels.append(Label(
                 text=namer.place(culture, "region").upper(),
                 x=float(xs[i]), y=float(ys[i]), kind="region", size=30,
-                tracking=5.0, priority=3, prov=int(j),
+                tracking=5.0, priority=3, prov=int(j), culture=int(j) % len(cultures),
             ))
     elif len(ys) > n_regions:
         pts = np.stack([xs, ys], 1).astype(np.float64)
@@ -258,11 +274,16 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
         ranks[i] = 0 if pos < n_city else (1 if pos < n_market else 2)
 
     for i, (x, y) in enumerate(picked):
-        culture = cultures[i % len(cultures)]
+        # A town belongs to the province it stands in, and takes that
+        # province's language.  Numbering the towns and cycling the cultures
+        # gave a country where every neighbouring village spoke a different
+        # tongue and the province name matched neither of them.
+        ci = _culture_index(prov, cultures, x, y, fallback=i)
         labels.append(Label(
-            text=namer.place(culture, "town", suffix=True),
+            text=namer.place(cultures[ci], "town", suffix=True),
             x=float(x), y=float(y), kind="town", size=15, priority=6, dot=True,
-            rank=ranks[i],
+            rank=ranks[i], prov=int(prov[int(y), int(x)]) if prov is not None else -1,
+            culture=ci,
         ))
 
     # --- rivers ---------------------------------------------------------
@@ -280,13 +301,14 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
             spot = _snap(rys[m], rxs[m], land, acc)
             if spot is None:
                 continue
-            culture = cultures[(j + 3) % len(cultures)]
+            ci = _culture_index(prov, cultures, spot[0], spot[1], fallback=j + 3)
             labels.append(Label(
-                text=namer.place(culture, "river", suffix=False),
+                text=namer.place(cultures[ci], "river", suffix=False),
                 x=spot[0], y=spot[1], kind="river", size=15,
                 tracking=1.5,
                 angle=_river_angle(rec.ravel(), spot[0], spot[1], ww),
-                priority=5,
+                priority=5, culture=ci,
+                prov=int(prov[int(spot[1]), int(spot[0])]) if prov is not None else -1,
             ))
 
     for lb in labels:
