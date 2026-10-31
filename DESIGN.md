@@ -292,6 +292,27 @@ paper. Two layers that earn their place on the physical plate are pure noise on
 the political one, and the plate only became legible when they were removed
 rather than tuned.
 
+## 18. A name is generated once
+
+The first printed copy of the book disagreed with itself. Plate IV was headed
+CHOUCHULDORA; the contents and the gazetteer called the same country
+SKAISKUGARD. Nothing was random about the output — every run produced exactly
+that pair of names — which is what made it hard to see.
+
+The cause was two calls to the same generator. `compose()` fills an empty title
+with `namer.title(...)`, and `cli.py` asked the same `Namer` for the title again
+when it built the gazetteer page. The two calls sit a few hundred draws apart in
+the stream, so the second name is not a repeat of the first; it is the next name
+in a sequence nobody meant to advance. Every plate that draws a name and every
+page that prints one must be handed the same string.
+
+The same class of bug appeared twice more in the same proof. The title page
+counted countries where it should have counted plates, and the index squeezed
+sixty-four rows onto a page regardless of how tall the type was, so the folios
+collided with the names. All three are failures of a page describing something
+other than what was printed — the kind of error a reader finds in ten seconds
+and the generator never reports.
+
 ---
 
 ## Smaller decisions worth recording
