@@ -165,8 +165,9 @@ Still wrong, and known to be wrong:
   is listed once.
 - Islands are lobed by construction, which is honest but monotonous: the
   harmonic sum is the same shape at every scale.
-- Nothing distinguishes a capital from a village except the label; a political
-  plate wants symbols of rank, and does not have them.
+- Towns have exactly two ranks: a seat of government gets a star, everything
+  else a dot. A real plate grades market towns, post towns, villages and
+  ruins, and this one has no vocabulary for any of it.
 - Region names are now compulsory, but on about one seed in six a province
   still finds nowhere to write: it is then tinted on the plate and missing from
   the key, which is the one inconsistency a reader will actually notice.

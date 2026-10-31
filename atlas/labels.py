@@ -36,6 +36,7 @@ class Label:
     w: float = 0.0
     h: float = 0.0
     prov: int = -1
+    capital: bool = False
 
     def box(self):
         return (self.x - self.w / 2, self.y - self.h / 2,

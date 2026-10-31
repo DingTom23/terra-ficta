@@ -59,6 +59,16 @@ def _measure(draw, text, fnt, tracking):
     return w, fnt.size * 1.35
 
 
+def _star(draw, x, y, r, fill):
+    """A five-pointed star: the mark a period plate uses for a capital."""
+    pts = []
+    for i in range(10):
+        a = -math.pi / 2 + i * math.pi / 5
+        rr = r if i % 2 == 0 else r * 0.42
+        pts.append((x + rr * math.cos(a), y + rr * math.sin(a)))
+    draw.polygon(pts, fill=fill)
+
+
 def _furniture_slots():
     """What has to be printed on the map, in the order it gets to choose.
 
@@ -195,6 +205,34 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
 
     placed = avoid(labels, ww, hh, obstacles)
 
+    # --- seats of government --------------------------------------------
+    # A political plate that marks every town alike says nothing about where
+    # the country is governed.  One town per province is promoted to its seat:
+    # the one nearest the province's own name, which is already sited near the
+    # middle of the province.
+    prov_grid = getattr(view, "provinces", None)
+    if prov_grid is not None:
+        seats = {}
+        for lb in placed:
+            if lb.kind != "region" or lb.prov < 0:
+                continue
+            best, best_d = None, 1e18
+            for t in placed:
+                if t.kind != "town":
+                    continue
+                ty, tx = int(t.y), int(t.x)
+                if not (0 <= ty < hh and 0 <= tx < ww):
+                    continue
+                if int(prov_grid[ty, tx]) != lb.prov:
+                    continue
+                d = (t.x - lb.x) ** 2 + (t.y - lb.y) ** 2
+                if d < best_d:
+                    best, best_d = t, d
+            if best is not None:
+                seats[lb.prov] = best
+        for t in seats.values():
+            t.capital = True
+
     # --- roads, from the towns that survived placement -------------------
     towns = [(lb.x, lb.y) for lb in placed if lb.kind == "town"]
     paths = roadmod.build_roads(towns, view.height, land)
@@ -222,8 +260,13 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         face, frac, _ = STYLES[lb.kind]
         f = decor.font(face, max(10, int(frac * RW)))
         if lb.kind == "town":
-            r = max(2, int(f.size * 0.15))
-            draw.ellipse([x - r, y - r, x + r, y + r], fill=ink)
+            if lb.capital:
+                f = decor.font("serif-bold", max(10, int(frac * RW)))
+                _star(draw, x, y, max(4.0, f.size * 0.40), ink)
+                r = f.size * 0.40
+            else:
+                r = max(2, int(f.size * 0.15))
+                draw.ellipse([x - r, y - r, x + r, y + r], fill=ink)
             decor.tracked_text(draw, (x + r * 2.4, y), lb.text, f, ink,
                                anchor_center=False, stroke_width=halo,
                                stroke_fill=paper_rgb)
