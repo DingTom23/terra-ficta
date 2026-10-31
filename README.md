@@ -29,7 +29,7 @@ python -m atlas --seed 7
 | **Provinces** | grown from watersheds, so borders follow the divides; drawn as a dotted rule |
 | **Roads** | a minimum spanning tree decides which towns connect, A\* over a terrain cost field decides where each road runs |
 | **Names** | a small invented phonology per region, so names within a province sound related |
-| **The sheet** | hypsometric tints, engraved slope shading, contours, coastal hachures, soundings, graticule, compass, scale, two keys, cartouche, plate number |
+| **The sheet** | hypsometric tints, hillshade, jittered slope hachures drawn down the fall line, contours, coastal hachures, soundings, graticule, compass, scale, two keys, cartouche, plate number |
 | **The book** | title page, colophon, contents with dot leaders, numbered plates, gazetteer pages, index of names |
 
 Output is a PNG at roughly 2700×2000, a bound PDF of eighteen pages, and a

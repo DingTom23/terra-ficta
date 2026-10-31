@@ -155,6 +155,23 @@ marked impassable and A\* returned `None`. The fix is to snap each endpoint to
 the nearest passable cell — and to make coastal cells passable at 35% land
 rather than 50%.
 
+## 11. Hachures, and why the grid had to go
+
+Hillshade alone gives a modern relief map wearing antique colours. What actually
+reads as a copper plate is hachures: short strokes drawn down the fall line,
+longer and darker where the ground is steep, absent on the flats.
+
+Two things had to be right. First, the strokes are real segments, not a texture
+lookup — a raster trick always leaves moiré, and moiré on a mountain reads as a
+printing fault. Second, the sampling lattice is jittered per row and per stroke.
+An even grid of parallel ticks reads as woven cloth; engravers never spaced their
+hachures regularly, and the eye notices that long before it can say why.
+
+The third thing was a bug: a stroke runs several pixels past its sample point, so
+sampling right up to the shore left a fringe of ticks standing in the water
+around every island. The sampling mask is now eroded a few pixels inland and the
+finished stroke layer is multiplied by the land mask.
+
 ---
 
 ## Smaller decisions worth recording
@@ -195,6 +212,7 @@ than a small one, so the type is fitted to the box at draw time.
 - Islands are smoother than they should be: the anti-fringe blur that rescues the
   continental coastline rounds small detached landmasses into eggs.
 - River labels are placed at the river but not rotated along it.
-- The biome classification exists and is unused.
 - Composition is fixed: the continent always sits near the centre, and the empty
-  sea to its west is not exploited for insets or soundings.
+  sea to its west is not exploited for insets.
+- Soundings are scattered by a rule, not surveyed: real charts thin them out with
+  depth and line them up with the approach to a harbour.

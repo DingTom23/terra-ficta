@@ -8,6 +8,8 @@ nothing fully black.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
@@ -307,9 +309,77 @@ def draw_roads(img, roads, scale=2, colour=(0.40, 0.27, 0.18), alpha=0.78, width
     return _mix(img, c, a * alpha)
 
 
+def draw_hachures(img, world, scale=2, spacing=3, colour=None, alpha=0.55,
+                  lo_pct=68.0, hi_pct=97.0):
+    """Engraved slope strokes.
+
+    Hachures are the one thing that separates an engraved plate from a shaded
+    relief.  They are short strokes drawn down the fall line, longer and denser
+    where the ground is steeper, and they stop on the flats -- which is why an
+    old map has soft plains and hatched mountains.
+
+    Drawn as real segments rather than faked with a texture: a raster trick
+    always leaves moire, and moire on a mountain reads as a printing fault.
+    """
+    RH, RW = img.shape[0], img.shape[1]
+    h = upsample(world.height, RW, RH)
+    gy, gx = np.gradient(h)
+    mag = np.hypot(gx, gy)
+    land_f = upsample((world.height > 0).astype(np.float32), RW, RH, Image.BILINEAR)
+    land = land_f > 0.5
+    if not land.any():
+        return img
+    # A stroke runs several pixels past its sample point, so sampling right up
+    # to the shore leaves a fringe of ticks standing in the water.  Back the
+    # sampling mask off the coast, and clip the finished strokes to the land.
+    land = _morph(land, max(2, int(scale * 1.6)), "min")
+
+    lo = float(np.percentile(mag[land], lo_pct))
+    hi = float(np.percentile(mag[land], hi_pct))
+    if hi <= lo:
+        return img
+
+    mask = Image.new("L", (RW, RH), 0)
+    d = ImageDraw.Draw(mask)
+    step = max(2, int(spacing * scale))
+    hi_lo = hi - lo
+    rng = np.random.default_rng(20240531)
+
+    for y0 in range(step // 2, RH, step):
+        # Jitter the lattice.  An even grid of strokes reads as woven cloth;
+        # engravers never spaced their hachures regularly, and the eye notices
+        # that long before it can say why.
+        ox = float(rng.uniform(0, step))
+        for x0 in range(step // 2, RW, step):
+            x = int(x0 + ox + rng.uniform(-step * 0.4, step * 0.4))
+            y = int(y0 + rng.uniform(-step * 0.4, step * 0.4))
+            if not (0 <= x < RW and 0 <= y < RH) or not land[y, x]:
+                continue
+            m = mag[y, x]
+            if m < lo:
+                continue
+            t = min((m - lo) / hi_lo, 1.0)
+            g = gx[y, x]
+            e = gy[y, x]
+            n = math.hypot(g, e)
+            if n < 1e-6:
+                continue
+            length = (3.0 + 8.0 * t) * scale * 0.62 * rng.uniform(0.75, 1.25)
+            d.line([(x, y), (x - g / n * length, y - e / n * length)],
+                   fill=int(255 * (0.30 + 0.70 * t) * rng.uniform(0.80, 1.0)),
+                   width=max(1, int(scale * 0.55)))
+
+    a = np.asarray(mask, dtype=np.float32)[..., None] / 255.0
+    a = a * np.clip(land_f * 1.6, 0.0, 1.0)[..., None]
+    c = np.array(colour if colour is not None else INK, dtype=np.float32)
+    return _mix(img, c, a * alpha)
+
+
 def render(world, scale=2, paper_tone=1.0):
     img, h, land_m = render_terrain(world, scale=scale)
+    img = draw_hachures(img, world, scale=scale)
     img = draw_lakes(img, world, scale=scale)
     img = draw_rivers(img, world, scale=scale)
     img = draw_coastline(img, land_m, scale=scale)
     return finish_paper(img, world, scale=scale, paper_tone=paper_tone)
+

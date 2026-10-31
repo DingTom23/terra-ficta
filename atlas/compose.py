@@ -90,6 +90,7 @@ def compose(world, namer: Namer, scale=2, margin_frac=0.10, title=None, subtitle
     land = world.height > 0
 
     img, h, land_m = render.render_terrain(world, scale=scale)
+    img = render.draw_hachures(img, world, scale=scale)
     img = render.draw_borders(img, getattr(world, "provinces", None), land,
                               scale=scale, weight=2, alpha=0.75)
     img = render.draw_lakes(img, world, scale=scale)
