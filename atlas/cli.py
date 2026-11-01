@@ -32,13 +32,18 @@ def latitude_for(seed: int) -> tuple[float, float]:
     """Where this country lies, north edge to south edge.
 
     Six countries all sitting between 12 and 58 degrees north would be six
-    drawings of the same place.  The span stays wide -- a country needs a
-    climate gradient to have a north and a south -- but the band moves, so one
-    country is arctic and another is Mediterranean.
+    drawings of the same place, so the band moves from seed to seed.
+
+    The span is deliberately modest.  At forty-six degrees of latitude the
+    country was five thousand kilometres across -- Russia -- while the sheet
+    labelled two dozen towns, and the gazetteer had to say that the nearest
+    neighbour of a market town was five hundred kilometres away.  Sixteen
+    degrees makes a European kingdom of about seventeen hundred kilometres,
+    which is the scale the rest of the book was always describing.
     """
     rng = np.random.default_rng(seed + 991)
-    top = float(rng.uniform(50.0, 76.0))
-    return top, top - 46.0
+    top = float(rng.uniform(44.0, 72.0))
+    return top, top - 16.0
 
 
 def render_sheet(seed: int, width: int = 1400, height: int = 950, scale: int = 0,

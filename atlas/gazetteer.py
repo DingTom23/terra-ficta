@@ -50,8 +50,9 @@ def describe(world, labels, name: str, feats=None):
 
     paras = []
     opening = (
-        f"{name.title()} lies between the {int(lat_bot)}th and {int(lat_top)}th parallels, "
-        f"and holds {share} parts land to {100 - share} of water."
+        f"{name.title()} lies between the {_ordinal(int(lat_bot))} and "
+        f"{_ordinal(int(lat_top))} parallels.  Of the ground within the neat "
+        f"line, {share} parts in a hundred are land."
     )
     if seas:
         # Which shore a sea breaks upon is a fact about where the label sits,
@@ -215,7 +216,7 @@ class Entry:
     text: str
 
 
-_RANK_WORD = {0: "market town", 1: "town", 2: "village"}
+_RANK_WORD = {0: "city", 1: "market town", 2: "village"}
 
 
 def _m(value, step=0):
@@ -293,12 +294,21 @@ def _province_entry(p):
     return text
 
 
+def _ordinal(n: int) -> str:
+    """63 -> 'the 63rd'.  A book that says '63th' is a book nobody trusts."""
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 def _sea_entry(s):
     text = f"a sea washing the {s.shore} shore"
     if s.rivers == 1:
-        text += "; one of the rivers shown reaches it"
+        text += "; one river shown reaches it"
     elif s.rivers > 1:
-        text += f"; {s.rivers} of the rivers shown reach it"
+        text += f"; {s.rivers} rivers shown reach it"
     return text + "."
 
 

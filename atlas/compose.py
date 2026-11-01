@@ -34,6 +34,28 @@ def _nice_step(span: float, target: float = 5.0) -> float:
     return 0.5
 
 
+def _nice_bar(leagues_across: float, avail_px: float, total_px: float):
+    """A scale bar whose length matches the number printed beneath it.
+
+    The old version drew a fixed-width bar and rounded the label to the
+    nearest fifty leagues, so a bar could be twenty per cent longer than the
+    distance it claimed to show -- the one error a scale bar must never make.
+    Here the number is chosen first and the bar is cut to fit it.
+    """
+    if leagues_across <= 0 or avail_px <= 0:
+        return total_px * 0.20, 50
+    target = leagues_across * (avail_px / total_px)
+    mag = 10.0 ** math.floor(math.log10(max(target, 1.0)))
+    for m in (5.0, 2.0, 1.0):
+        if m * mag <= target:
+            count = m * mag
+            break
+    else:
+        count = mag
+    count = int(round(count))
+    return total_px * (count / leagues_across), count
+
+
 def _soundings(depth, count=24, rng=None):
     """Depth figures in the sea: the oldest way to make water look measured."""
     rng = rng or np.random.default_rng(0)
@@ -342,8 +364,8 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     mid_lat = 0.5 * (vspec.lat_top + vspec.lat_bottom)
     km_across = lon_span * 111.0 * math.cos(math.radians(mid_lat))
     leagues_across = km_across / 5.56
-    bar_w = RW * 0.20
-    leagues_shown = max(50, round(leagues_across * (bar_w / RW) / 50.0) * 50)
+    avail = (scale_box[2] - scale_box[0]) if scale_box else RW * 0.20
+    bar_w, leagues_shown = _nice_bar(leagues_across, avail, RW)
     bar_x = scale_box[0] if scale_box else M + RW * 0.05
     bar_y = scale_box[1] if scale_box else M + RH * 0.955
     bar_h = max(7, int(M * 0.10))

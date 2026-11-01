@@ -542,10 +542,11 @@ than a small one, so the type is fitted to the box at draw time.
 
 - The ice has no history.  It does not advance or retreat, no coast is drawn as
   it would have looked in a colder century, and no iceberg is ever calved.
-- The scale is not honest.  A country measures about 7,000 km across — the size
-  of Russia — but its largest city holds four thousand people and its towns
-  stand five hundred kilometres apart.  Either the populations must rise by two
-  orders of magnitude or the countries must shrink to the size of Britain.
+- The scale was not honest, and now is: a country spans sixteen degrees of
+  latitude — seventeen hundred kilometres — so a river runs 800 km, a market
+  town holds 11,000 people and its neighbour stands 110 km away.  What is still
+  missing is density: two dozen towns on a million square kilometres, and the
+  countryside between them holds nothing but rivers.
 - Islands are lobed by construction, which is honest but monotonous: the same
   three harmonics at every scale, and an archipelago reads as a family.
 - Soundings are scattered by a rule, not surveyed: a real chart thins them with

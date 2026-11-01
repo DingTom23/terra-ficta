@@ -15,12 +15,12 @@ from atlas.labels import build_labels
 from atlas.naming import Namer
 from atlas.world import build_world
 
-SPEC = WorldSpec(seed=7, width=700, height=480)
+SPEC = WorldSpec(seed=7, width=700, height=480, lat_top=58.0, lat_bottom=42.0)
 
 _WORLD = None
 _LABELS = None
 _COLD = None
-COLD_SPEC = WorldSpec(seed=7, width=420, height=300, lat_top=72.0, lat_bottom=26.0)
+COLD_SPEC = WorldSpec(seed=7, width=420, height=300, lat_top=72.0, lat_bottom=56.0)
 
 
 def _cold_world():
@@ -243,3 +243,64 @@ def test_ice_takes_no_province_on_the_political_plate():
     ys, xs = np.where(ice)
     px = img[ys, xs]
     assert px.mean() > 200, f"ice on the political plate came out at {px.mean():.0f}"
+
+
+def test_the_map_is_a_country_and_not_a_continent():
+    """The book calls these countries, so they have to be country-sized.
+
+    At forty-six degrees of latitude the sheet was five thousand kilometres
+    across and the gazetteer had to explain why a market town's nearest
+    neighbour was five hundred kilometres away.  A plate is about seventeen
+    hundred kilometres: France, Spain, Sweden -- not Russia.
+    """
+    w, _ = _world_and_labels()
+    km_x, km_y = features.cell_km(w)
+    width_km = km_x * w.spec.width
+    height_km = km_y * w.spec.height
+    assert 800.0 <= width_km <= 3000.0, f"the map is {width_km:,.0f} km wide"
+    assert 800.0 <= height_km <= 3000.0, f"the map is {height_km:,.0f} km tall"
+
+
+def test_towns_are_spaced_like_settlements():
+    """Towns a hundred kilometres apart, not five hundred."""
+    w, labels = _world_and_labels()
+    feats = features.measure(w, labels)
+    spacing = sorted(t.nearest_km for t in feats.towns)
+    median = spacing[len(spacing) // 2]
+    assert 25.0 <= median <= 260.0, f"the median town is {median:.0f} km from its neighbour"
+
+
+def test_a_city_is_bigger_than_a_market_town_and_a_village():
+    w, labels = _world_and_labels()
+    feats = features.measure(w, labels)
+    by_rank = {}
+    for t in feats.towns:
+        by_rank.setdefault(t.rank, []).append(t.pop)
+    assert 0 in by_rank and 2 in by_rank, "the country has no cities or no villages"
+    city = max(by_rank[0])
+    village = max(by_rank[2])
+    assert city > village, f"a city holds {city} and a village {village}"
+    assert city >= 10000, f"the largest city holds only {city}"
+
+
+def test_the_longest_river_is_a_river_and_not_a_country():
+    w, labels = _world_and_labels()
+    feats = features.measure(w, labels)
+    r = feats.longest_river()
+    assert r is not None
+    assert 80.0 <= r.length_km <= 2500.0, f"the longest river is {r.length_km:,.0f} km"
+
+def test_the_scale_bar_is_as_long_as_it_says():
+    """A scale bar that is twenty per cent out is worse than no scale bar."""
+    import math
+    from atlas.compose import _nice_bar
+
+    total = 2704.0
+    for across in (40, 60, 120, 180, 260, 300, 1000):
+        bar, n = _nice_bar(across, 0.23 * total, total)
+        assert bar <= 0.23 * total + 1e-6, "the bar runs out of its slot"
+        assert abs(bar / total * across - n) < 1e-6, \
+            f"a {n}-league bar measures {bar / total * across:.2f}"
+        mant = n / 10 ** math.floor(math.log10(n))
+        assert abs(mant - round(mant)) < 1e-9 and round(mant) in (1, 2, 5), \
+            f"{n} is not a round number of leagues"

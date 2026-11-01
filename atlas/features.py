@@ -360,9 +360,16 @@ def measure(world, labels) -> Features:
     for t in feats.towns:
         if chief is not None and t is not chief:
             t.to_seat_km = math.hypot((chief.x - t.x) * km_x, (chief.y - t.y) * km_y)
-        base = {0: 2500, 1: 700, 2: 90}.get(t.rank, 90)
+        # A kingdom of seventeen hundred kilometres, in the year 1807.  The
+        # old figures -- a market town of five hundred souls, five hundred
+        # kilometres from its neighbour -- described a wilderness that the
+        # plate was not drawing.
+        base = {0: 45000, 1: 11000, 2: 1200}.get(t.rank, 1200)
         rng = np.random.default_rng(_seed_of(t.name))
-        t.pop = int(round(base * (0.6 + 1.1 * rng.random()) / 10.0)) * 10
+        pop = base * (0.55 + 1.20 * rng.random())
+        if getattr(t, "capital", False):
+            pop *= 1.8
+        t.pop = int(round(pop / 100.0)) * 100
 
     for r in feats.rivers:
         r.source_m = float(max(h[r.source[0], r.source[1]], 0.0))

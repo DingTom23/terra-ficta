@@ -224,9 +224,11 @@ Still wrong, and known to be wrong:
 - The dictionary is thin. Every entry is a measurement — a rank, an elevation,
   a distance — and nothing else. There is no trade, no history, no reason for
   the town to be there. A real gazetteer entry has a *why*.
-- The scale is not honest. A country is 7,000 km across, which makes it the
-  size of Russia, but its largest city has four thousand people and its towns
-  sit five hundred kilometres apart. Either the populations must rise by two
-  orders of magnitude or the countries must shrink.
+- The scale is now honest, and that is the newest thing in the book: a country
+  spans sixteen degrees of latitude, about seventeen hundred kilometres, so a
+  river is 800 km long, a market town holds 11,000 people and its neighbour
+  stands 110 km away. What is still missing is *density*: the plate names two
+  dozen towns and the countryside between them is empty of everything but
+  rivers.
 - Nothing in the book is written by a person, including the colophon, which is
   the one place a person ought to be speaking.
