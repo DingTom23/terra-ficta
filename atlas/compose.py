@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+import copy
 import math
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import decor, layout, render, roads as roadmod
+from . import decor, layout, regions, render, roads as roadmod
 from .labels import build_labels, avoid
 from .naming import Namer, roman
 from .climate import BIOMES
-from .palette import INK, INK_SOFT, INK_WATER, PAPER, HYPSOMETRIC
+from .palette import INK, INK_SOFT, INK_WATER, PAPER, PAPER_OLD, HYPSOMETRIC
 
 # kind -> (font face, point size as a fraction of the sheet width, tracking as
 # a fraction of the point size).  Sizing type against the sheet rather than
@@ -158,8 +159,28 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     land = view.height > 0
 
     prov = getattr(view, "provinces", None)
-    if mode == "political":
-        img, h, land_m = render.render_political(view, scale=s)
+
+    # The ancient plate is the same ground under different powers.  The
+    # borders are redrawn from a different partition of the same watersheds,
+    # so the country is recognisable and the map is not: a reader can lay the
+    # two sheets side by side and see what changed hands.
+    tints = None
+    if mode == "ancient":
+        alt, _mouths = regions.provinces(view.height, view.drainage["receivers"],
+                                         k=min(9, int(vspec.provinces) + 2),
+                                         seed=int(vspec.seed) + 771)
+        view = copy.copy(view)
+        view.provinces = alt
+        prov = alt
+        tints = render.ANCIENT_TINTS
+
+    # A sheet a century older has browned.  The paper is the strongest signal
+    # that the reader is looking at another time, not another country.
+    paper_c = PAPER_OLD if mode == "ancient" else PAPER
+
+    if mode in ("political", "ancient"):
+        img, h, land_m = render.render_political(view, scale=s, tints=tints,
+                                                 base_colour=paper_c)
         # A whisper of hachure under the wash.  Without it the provinces read
         # as flat polygons laid on a drawing; with it the country looks
         # engraved first and coloured afterwards, which is the right order.
@@ -183,18 +204,19 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     M = max(28, int(RH * margin_frac))
     PW, PH = RW + 2 * M, RH + 2 * M
 
-    page = Image.new("RGB", (PW, PH), tuple(int(c * 255) for c in PAPER))
+    page = Image.new("RGB", (PW, PH), tuple(int(c * 255) for c in paper_c))
     draw = ImageDraw.Draw(page)
 
     ink = tuple(int(c * 255) for c in INK)
     ink_soft = tuple(int(c * 255) for c in INK_SOFT)
     ink_water = tuple(int(c * 255) for c in INK_WATER)
-    paper_rgb = tuple(int(c * 255) for c in PAPER)
+    paper_rgb = tuple(int(c * 255) for c in paper_c)
     box = (M, M, M + RW, M + RH)
 
     # --- furniture, placed before the names so the names can dodge it -----
     open_field = layout.openness(land)
-    spots = layout.place(_political_slots() if mode == "political" else _furniture_slots(),
+    spots = layout.place(_political_slots() if mode in ("political", "ancient")
+                         else _furniture_slots(),
                          open_field)
 
     def to_page(b):
@@ -219,6 +241,8 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         sub = subtitle
     elif mode == "political":
         sub = f"shewing the political divisions, MDCCC{roman(1 + spec.seed % 9)}"
+    elif mode == "ancient":
+        sub = f"shewing the ancient divisions in the year MDCC{roman(1 + spec.seed % 9)}"
     else:
         sub = f"surveyed in the year {roman(1800 + (spec.seed % 99))}"
 
@@ -231,6 +255,19 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         lb.tracking = px * track_f
         wpx, hpx = _measure(draw, lb.text, f, lb.tracking)
         lb.w, lb.h = wpx / s, hpx / s
+
+    # Older powers, older names.  The towns keep theirs -- a town called
+    # Achmouth in 1703 is Achmouth in 1803 -- but the provinces are renamed
+    # from a second culture, because a province is a government and the
+    # government is what changed.
+    if mode == "ancient":
+        old = Namer(int(vspec.seed) + 771)
+        for lb in labels:
+            if lb.kind == "region":
+                lb.text = old.place(namer.cultures[lb.culture % len(namer.cultures)],
+                                    "region").upper()
+                f = decor.font(STYLES["region"][0], max(10, int(STYLES["region"][1] * RW)))
+                lb.w, lb.h = (v / s for v in _measure(draw, lb.text, f, lb.tracking))
 
     placed = avoid(labels, ww, hh, obstacles)
 
@@ -269,7 +306,7 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     paths = [roadmod.smooth(p, window=7) for p in paths]
     img = render.draw_roads(img, paths, scale=s)
 
-    img = render.finish_paper(img, view, scale=s)
+    img = render.finish_paper(img, view, scale=s, base_colour=paper_c)
     page.paste(Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)), (M, M))
 
     # --- rhumb lines -----------------------------------------------------
@@ -394,8 +431,8 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
                               ink, paper_rgb, title="BIOMES",
                               size=max(9, int(M * 0.115)))
 
-    if mode == "political" and prov_box:
-        entries = [(render.province_swatch(lb.prov), lb.text)
+    if mode in ("political", "ancient") and prov_box:
+        entries = [(render.province_swatch(lb.prov, tints=tints), lb.text)
                    for lb in placed if lb.kind == "region" and lb.prov >= 0]
         entries.sort(key=lambda e: e[1])
         if entries:

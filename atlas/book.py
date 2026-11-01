@@ -131,37 +131,58 @@ def contents_page(size, entries):
     # row height and hope, shrink the setting until the last row clears the
     # foot -- a table that runs off the page is worse than small type.
     rows = max(1, len(entries))
-    size = int(w * 0.015)
+    avail = bottom - top
+    floor = int(w * 0.0075)
+
+    # A contents page must hold every line it is given.  Tighten the leading
+    # before shrinking the type, shrink the type only to a floor, and if even
+    # that will not do, set the table in two columns -- a line that runs off
+    # the foot of the page is worse than small type, and six-point type is
+    # worse than a second column.
+    cols, size = 1, int(w * 0.015)
     while True:
-        f = decor.font("serif", size)
-        fy = decor.font("antiqua", size)
-        fnum = decor.font("antiqua", int(size * 0.93))
-        lead = int(size * 2.0)
-        if top + rows * lead <= bottom or size <= int(w * 0.0085):
+        per = (rows + cols - 1) // cols
+        s = int(w * 0.015)
+        while s > floor and per * int(s * 1.45) > avail:
+            s -= 1
+        if per * int(s * 1.45) <= avail or cols >= 2:
+            size = s
             break
-        size -= 1
-    y = top
+        cols = 2
 
-    # The plate column is as wide as the widest plate label, measured, not
-    # guessed: "PLATE III" is nearly twice the width of "PLATE I", and a fixed
-    # offset ran the two columns together on every third line.
-    col = max((draw.textlength(num, font=fnum) for num, _, _ in entries), default=0)
-    tx = x0 + col + f.size * 0.9
+    f = decor.font("serif", size)
+    fy = decor.font("antiqua", size)
+    fnum = decor.font("antiqua", int(size * 0.93))
+    per = (rows + cols - 1) // cols
+    lead = min(int(size * 2.0), max(int(size * 1.35), avail // per))
 
-    for num, name, folio in entries:
-        draw.text((x0, y), num, font=fnum, fill=soft)
-        draw.text((tx, y), name, font=f, fill=ink)
-        tw = draw.textlength(name, font=f)
-        dots_from = tx + tw + f.size * 0.4
-        dots_to = x1 - f.size * 1.4
-        if dots_to > dots_from:
-            step = f.size * 0.42
-            x = dots_from
-            while x < dots_to:
-                draw.point((x, y + f.size * 0.62), fill=soft)
-                x += step
-        draw.text((x1, y), str(folio), font=fy, fill=ink, anchor="ra")
-        y += lead
+    gap = w * 0.035
+    span = (x1 - x0 - (cols - 1) * gap) / cols
+
+    for c in range(cols):
+        cx0 = x0 + c * (span + gap)
+        cx1 = cx0 + span
+        chunk = entries[c * per:(c + 1) * per]
+        # The plate column is as wide as the widest label in it, measured and
+        # not guessed: "PLATE III" is nearly twice the width of "PLATE I", and
+        # a fixed offset ran the two columns together on every third line.
+        col = max((draw.textlength(num, font=fnum) for num, _, _ in chunk), default=0)
+        tx = cx0 + col + f.size * 0.9
+        y = top
+        for num, name, folio in chunk:
+            draw.text((cx0, y), num, font=fnum, fill=soft)
+            draw.text((tx, y), name, font=f, fill=ink)
+            tw = draw.textlength(name, font=f)
+            dots_from = tx + tw + f.size * 0.4
+            dots_to = cx1 - f.size * 1.4
+            if dots_to > dots_from:
+                step = f.size * 0.42
+                x = dots_from
+                while x < dots_to:
+                    draw.point((x, y + f.size * 0.62), fill=soft)
+                    x += step
+            draw.text((cx1, y), str(folio), font=fy, fill=ink, anchor="ra")
+            y += lead
     return page
 
 

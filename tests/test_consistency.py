@@ -304,3 +304,38 @@ def test_the_scale_bar_is_as_long_as_it_says():
         mant = n / 10 ** math.floor(math.log10(n))
         assert abs(mant - round(mant)) < 1e-9 and round(mant) in (1, 2, 5), \
             f"{n} is not a round number of leagues"
+
+
+def test_the_ancient_plate_redraws_the_borders():
+    """The same ground under different powers: the partition must move."""
+    from atlas import regions
+
+    world, _labels = _world_and_labels()
+    rec = world.drainage["receivers"]
+    now, _ = regions.provinces(world.height, rec, k=5, seed=world.spec.seed)
+    then, _ = regions.provinces(world.height, rec, k=7, seed=world.spec.seed + 771)
+    land = world.height > 0
+    moved = (now != then) & land
+    share = float(moved.sum()) / max(1, int(land.sum()))
+    assert share > 0.20, f"only {share:.0%} of the land changed province"
+
+
+def test_an_older_sheet_is_browner():
+    """The paper is the strongest signal that the reader is in another time."""
+    from atlas.palette import PAPER, PAPER_OLD
+
+    assert PAPER_OLD[0] - PAPER_OLD[2] > PAPER[0] - PAPER[2] + 0.02, \
+        "the old sheet is not warmer than the new one"
+    assert sum(PAPER_OLD) < sum(PAPER), "the old sheet is not darker"
+
+
+def test_the_contents_page_holds_every_line():
+    """A contents page must fit the book it describes, however long it gets."""
+    from atlas import book
+
+    for n in (12, 30, 36, 60):
+        ents = [(f"PLATE {i}", f"Country number {i}", i) for i in range(1, n + 1)]
+        a = np.asarray(book.contents_page(book.PAGE, ents).convert("L"))
+        rows = np.where((a < 140).sum(axis=1) > 0)[0]
+        assert rows.max() < book.PAGE[1] - 40, \
+            f"{n} contents lines run to row {rows.max()} of {book.PAGE[1]}"

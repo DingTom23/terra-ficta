@@ -11,6 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 # --- paper --------------------------------------------------------------
+PAPER_OLD = (0.898, 0.851, 0.739)   # a sheet a century older
 PAPER = (0.925, 0.895, 0.820)
 PAPER_DARK = (0.870, 0.830, 0.740)
 INK = (0.180, 0.150, 0.125)

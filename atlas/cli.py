@@ -101,6 +101,8 @@ def main(argv=None):
     ap.add_argument("--viewer", action="store_true", help="write an interactive viewer.html")
     ap.add_argument("--political", action="store_true",
                     help="also draw a political plate for every world")
+    ap.add_argument("--ancient", action="store_true",
+                    help="also draw the same country as it stood a century earlier")
     args = ap.parse_args(argv)
 
     outdir = Path(args.outdir)
@@ -110,7 +112,7 @@ def main(argv=None):
     sheets = []
     cards = []
     viewer_items = []
-    n_plates = len(seeds) * (2 if args.political else 1)
+    n_plates = len(seeds) * (1 + int(bool(args.political)) + int(bool(args.ancient)))
     counter = [0]
 
     def next_plate():
@@ -138,10 +140,22 @@ def main(argv=None):
             pol_page.save(ppath)
             print(f"  -> {ppath}")
 
+        anc_page = None
+        anc_num = None
+        if args.ancient:
+            anc_num = next_plate()
+            _, _, anc_page, _ = render_sheet(
+                seed, args.width, args.height, args.scale, name,
+                plate=anc_num, mode="ancient")
+            apath = outdir / f"atlas_{seed:04d}_ancient.png"
+            anc_page.save(apath)
+            print(f"  -> {apath}")
+
         feats = features.measure(view, labels)
         title, subtitle, paras = gazetteer.describe(view, labels, name, feats)
         ents = gazetteer.entries(view, labels, feats)
         sheets.append(dict(plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
+                           anc_page=anc_page, anc_plate=anc_num,
                            title=title, subtitle=subtitle, paras=paras, labels=labels,
                            entries=ents))
         cards.append((path, title, subtitle, paras))
@@ -179,7 +193,8 @@ def main(argv=None):
 
 def _plate_count(sheets) -> int:
     """How many plates the book actually contains, not how many countries."""
-    return sum(1 + (1 if s.get("pol_page") is not None else 0) for s in sheets)
+    return sum(1 + (1 if s.get("pol_page") is not None else 0)
+               + (1 if s.get("anc_page") is not None else 0) for s in sheets)
 
 
 def _assemble_book(sheets, seeds):
@@ -206,6 +221,11 @@ def _assemble_book(sheets, seeds):
             contents.append((sheet["pol_plate"] or "",
                              sheet["title"] + " — political", folio))
             body.append(book.place_plate(sheet["pol_page"]))
+        if sheet.get("anc_page") is not None:
+            folio += 1
+            contents.append((sheet["anc_plate"] or "",
+                             sheet["title"] + " — as it stood a century earlier", folio))
+            body.append(book.place_plate(sheet["anc_page"]))
 
         folio += 1
         contents.append(("", sheet["title"] + " — a survey", folio))

@@ -17,7 +17,7 @@ from .config import WorldSpec
 from .climate import BIOMES
 from .filters import blur
 from .noise import fbm, smoothstep
-from .palette import (PAPER, PAPER_DARK, INK, INK_SOFT, INK_WATER, INK_RIVER,
+from .palette import (PAPER, PAPER_DARK, PAPER_OLD, INK, INK_SOFT, INK_WATER, INK_RIVER,
                       hypsometric, bathymetric)
 from .shade import hillshade, ambient_occlusion
 
@@ -41,7 +41,7 @@ def _mix(dst, src, alpha):
     return dst * (1.0 - alpha) + src * alpha
 
 
-def paper(size, seed=3, tone=1.0):
+def paper(size, seed=3, tone=1.0, base_colour=None):
     """Aged paper: broad mottling, fine grain, and a soft vignette."""
     w, h = size
     ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
@@ -52,7 +52,7 @@ def paper(size, seed=3, tone=1.0):
     grain = fbm(seed + 7, octaves=3)(x, y, freq=180.0, gain=0.5)
     fibre = fbm(seed + 13, octaves=2)(x * 1.0, y * 6.0, freq=90.0, gain=0.5)
 
-    base = np.array(PAPER, dtype=np.float32)
+    base = np.array(base_colour or PAPER, dtype=np.float32)
     lum = 1.0 + 0.030 * mottle + 0.018 * grain + 0.010 * fibre
     rgb = base[None, None, :] * lum[..., None]
 
@@ -258,11 +258,27 @@ PROVINCE_TINTS = [
 ]
 
 
-def province_tint(k):
-    return PROVINCE_TINTS[int(k) % len(PROVINCE_TINTS)]
+# A hand-coloured sheet a century old: the same divisions, but the pigments
+# have browned and faded until the greens are olive and the blues are dust.
+ANCIENT_TINTS = [
+    (0.780, 0.610, 0.470),
+    (0.700, 0.645, 0.520),
+    (0.745, 0.560, 0.500),
+    (0.560, 0.620, 0.665),
+    (0.705, 0.620, 0.620),
+    (0.655, 0.660, 0.575),
+    (0.780, 0.680, 0.540),
+    (0.600, 0.660, 0.620),
+    (0.740, 0.640, 0.560),
+]
 
 
-def province_swatch(k, tint=0.55, relief=0.11):
+def province_tint(k, tints=None):
+    tints = tints or PROVINCE_TINTS
+    return tints[int(k) % len(tints)]
+
+
+def province_swatch(k, tint=0.55, relief=0.11, tints=None):
     """The colour a province actually reads as on the sheet.
 
     A legend swatch in the pure tint is a lie: the map lays that tint over
@@ -270,13 +286,14 @@ def province_swatch(k, tint=0.55, relief=0.11):
     patch is half a shade lighter and a good deal greyer than the ink in the
     key.  Print the blend, not the ink.
     """
-    c = np.array(province_tint(k), dtype=np.float32)
+    c = np.array(province_tint(k, tints), dtype=np.float32)
     p = np.array(PAPER, dtype=np.float32)
     mixed = p * (1.0 - tint) + c * tint
     return tuple(float(v) for v in mixed * (1.0 - relief * 0.5))
 
 
-def render_political(world, scale=2, tint=0.55, relief=0.11):
+def render_political(world, scale=2, tint=0.55, relief=0.11, tints=None,
+                     base_colour=None):
     """A political plate: flat province washes, the relief only hinted.
 
     A physical sheet asks the eye to read height, so the tint is a ramp and
@@ -305,7 +322,7 @@ def render_political(world, scale=2, tint=0.55, relief=0.11):
     _abyss = np.array([0.664, 0.754, 0.802], dtype=np.float32)
     sea_rgb = _flat * (1.0 - _deep) + _abyss * _deep
 
-    base = np.array(PAPER, dtype=np.float32)
+    base = np.array(base_colour or PAPER, dtype=np.float32)
     land_rgb = np.ones((RH, RW, 3), dtype=np.float32) * base
     prov = getattr(world, 'provinces', None)
     if prov is not None:
@@ -313,7 +330,7 @@ def render_political(world, scale=2, tint=0.55, relief=0.11):
         for k in np.unique(prov):
             if k < 0:
                 continue
-            flat[prov == k] = province_tint(k)
+            flat[prov == k] = province_tint(k, tints)
         # A few per cent of the land drains to a mouth that never made the
         # top-k list.  Left as paper those cells print as pale holes in the
         # middle of a province, so they take a neutral land tone instead.
@@ -430,9 +447,10 @@ def draw_coastline(img, land_m, scale=2, width=0.42, strength=0.88):
     return _mix(img, np.array(INK, dtype=np.float32), edge * strength)
 
 
-def finish_paper(img, world, scale=2, paper_tone=1.0):
+def finish_paper(img, world, scale=2, paper_tone=1.0, base_colour=None):
     """Lay the printed image onto the sheet."""
-    base = paper((img.shape[1], img.shape[0]), seed=world.spec.seed + 5, tone=paper_tone)
+    base = paper((img.shape[1], img.shape[0]), seed=world.spec.seed + 5,
+                 tone=paper_tone, base_colour=base_colour)
     # Texture only modulates luminance; tinting by the paper's hue would wash
     # the blues out of the water and turn the whole sheet to mud.
     tex = base.mean(axis=2) / max(float(base.mean()), 1e-6)

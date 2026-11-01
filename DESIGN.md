@@ -485,6 +485,44 @@ made it grow to the whole grid — pack ice spans the full width of the map — 
 the country became a detail in the middle of an ocean.  The frame stays on the
 land; the margin carries the ice.
 
+## 25. Two plates, one country, a century apart
+
+A book of six countries is a catalogue.  A book that shows the same country twice
+is a history -- and the reader supplies the history, because the two sheets are
+the same ground and nothing else about them agrees.
+
+The ancient plate is not a second render of the same data with a filter on it.
+Three things change, and they change for a reason:
+
+**The borders.**  Provinces are grown from watersheds: river mouths are seeded,
+each is weighted by the ground that drains through it, and the land is divided
+between them.  Redraw the partition from a different seed and a different count
+and the new provinces still follow the same ridges -- which is what real
+frontiers do.  They are not random polygons laid over the country; they are
+another reading of the same geography.  That is why the plate is legible as a
+*previous* political order rather than as an invented one.
+
+**The names, but not all of them.**  A province is a government, so its name
+changes with the government.  A town is a place, so its name does not: a town
+called Achmouth in 1703 is Achmouth in 1803, and the reader who flips between the
+sheets sees the same dots under the same names inside different frontiers.  That
+single invariant is what makes the two plates read as one country.  Renaming the
+towns as well would have made two unrelated maps that happened to share a
+coastline.
+
+**The paper.**  The strongest signal is not a label but a colour.  A sheet a
+century older has browned: `PAPER_OLD` is warmer and darker than `PAPER`, and it
+is applied to the page, the land base and the paper texture together, so the
+whole sheet ages as one object.  The province tints fade with it -- the greens
+go olive, the blues go to dust.  Without the paper, the plate read as the
+political sheet with different colours and the eye refused to believe it was
+looking at another time.
+
+What the plate deliberately does *not* do is invent a history: no battle sites,
+no ruined cities, no "here the old kingdom fell".  It shows a political
+arrangement and lets the reader notice that the arrangement is not the one on the
+facing plate.
+
 ## Smaller decisions worth recording
 
 **The border is a measuring instrument.** A graduated chequer band outside the neat
