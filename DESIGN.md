@@ -751,3 +751,29 @@ several systems, and any single coefficient describes the sum, not the system.
 
 Two plates, one country, two different claims about how a map should be read.  Neither is
 a mistake; printing only one of them would be.
+
+## 31. A tree is a network, not a route
+
+The itinerary was built in the obvious way first: take the road network the plate already
+draws, walk the tree path from the seat to the most remote town, and describe the country
+it passes.  The result was eight thousand two hundred and seventy-six kilometres in a
+country fifteen hundred wide, and two hundred and seventy-six days at a cart's pace.
+
+Nothing was broken.  A minimum spanning tree is built to connect every town at the least
+total cost, and the path between two particular towns in that tree runs through every town
+that happens to lie between them in the tree's order -- seventeen of the twenty-four towns
+on this map.  The network is a good network and a terrible route.  A traveller takes the
+shortest road, so the itinerary now runs one least-cost search between the two towns on the
+same cost field the roads are built from: six hundred kilometres straight, sixteen hundred
+along the valleys, fifty-five days.  That is a journey.
+
+The second error was subtler and worth keeping.  Rivers were detected by proximity to the
+river *labels*, which are placed at one point on each river -- so the road crossed rivers
+constantly and found almost none of them.  A river is a channel, not a label: the crossing
+test is now the drainage itself, the heaviest eight parts in a thousand of the land.  The
+label is then used only to *name* the crossing, if one is near enough to have a name.
+
+Every clause in the journal is backed by a station recorded on the way, so the text and the
+sheet cannot disagree: the distances are summed along the road, the heights are read off
+the terrain at each station, the provinces are the partition that is drawn, and the count
+of watercourses is the count of crossings.

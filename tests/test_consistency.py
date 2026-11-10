@@ -441,3 +441,34 @@ def test_the_engraved_plate_inks_the_gentle_ground_too():
     gentle = land & (slope <= np.percentile(slope[land], 33.0))
     assert ink[gentle].mean() > 0.015, \
         "gentle ground carries no line work, so the plate is a mountain sketch"
+
+
+def test_the_journey_can_actually_be_walked():
+    """The itinerary is a claim about the country, so it has to be walkable:
+    on land, of a believable length, and with the towns it names at its ends."""
+    from atlas import features, journey
+
+    world, labels = _world_and_labels()
+    feats = features.measure(world, labels)
+    trip = journey.plan(world, feats)
+    assert trip is not None, "no route between the seat and the farthest town"
+    assert 20.0 <= trip.total_km <= 6000.0, f"{trip.total_km:.0f} km is not a journey"
+    assert trip.days == max(2, int(round(trip.total_km / journey.KM_PER_DAY)))
+    assert trip.high_m >= 0.0
+
+    title, subtitle, paras = journey.text(trip, world, feats, "Nowhere")
+    assert trip.start.upper() in title and trip.end.upper() in title
+    assert all(p.strip() for p in paras), "an empty paragraph was set"
+
+
+def test_the_journey_does_not_walk_on_water():
+    """Every station's height is read off the terrain; a route through the sea
+    would show it as a negative height."""
+    from atlas import features, journey
+
+    world, labels = _world_and_labels()
+    feats = features.measure(world, labels)
+    trip = journey.plan(world, feats)
+    assert trip is not None
+    assert all(st.elev >= 0.0 for st in trip.stations), \
+        "the road crosses water at some station"

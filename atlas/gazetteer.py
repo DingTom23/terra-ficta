@@ -149,8 +149,17 @@ def text_page(title, subtitle, paragraphs, size=(1600, 2000), seed=0):
 
     margin = int(w * 0.12)
     ft = decor.font("antiqua-bold", int(w * 0.036))
-    decor.tracked_text(draw, (w / 2, margin * 0.92), title.upper(), ft, ink,
-                       tracking=ft.size * 0.18)
+    # A heading that overruns the sheet is worse than one set smaller: measure
+    # the tracked line and bring it in until it clears the margins.
+    head = title.upper()
+    track = ft.size * 0.18
+    limit = w * (1.0 - 2 * 0.12) * 0.98
+    while ft.size > 12 and (
+            sum(draw.textlength(ch, font=ft) for ch in head)
+            + track * (len(head) - 1)) > limit:
+        ft = decor.font("antiqua-bold", ft.size - 2)
+        track = ft.size * 0.18
+    decor.tracked_text(draw, (w / 2, margin * 0.92), head, ft, ink, tracking=track)
     fs = decor.font("antiqua-italic", int(w * 0.0185))
     draw.text((w / 2, margin * 0.92 + ft.size * 1.55), subtitle, font=fs, fill=soft, anchor="mm")
 
