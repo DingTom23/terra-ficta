@@ -720,3 +720,34 @@ than a small one, so the type is fitted to the box at draw time.
 - The naming has no grammar. Names are phonotactically consistent within a
   province, but there is no syntax: no "Great", no "of", no river named after a
   town named after a saint.
+
+## 30. A line plate is a different claim, not a denser one
+
+The reviewer asked the right question and then I measured it.  Isolating the ink the
+hachures add -- the same sheet with and without them -- and correlating it against true
+slope gives r = 0.230, with the steepest tenth of the land receiving 0.0081 and the
+flattest 0.0002.  The correlation is real.  The coverage is not: **94.5 per cent of the
+land receives no hachure at all.**  On the physical sheet the hachures are an accent laid
+on the mountains; the continuous hillshade is what models the ground.
+
+The obvious repair -- draw hachures everywhere -- is wrong, and I could see why before
+trying it.  To cover ninety-five per cent of the land at the same stroke weight, the
+strokes must be short and pale, and a field of short pale strokes is grey fog.  Density is
+what makes a hachure plate legible; spreading the same ink over ten times the area removes
+exactly the signal that carried the meaning.
+
+So the line sheet inverts the arrangement instead of intensifying it.  The **contours** are
+the height system: complete, unambiguous, readable with a key, and present on flat ground
+where hachures have nothing to say.  The hachures become surface texture on every slope,
+dense where the ground is steep and sparse where it is gentle.  The colour is withdrawn to
+a thirty per cent hypsometric wash over paper.
+
+Measured on the same seed: ink against slope rises from r = 0.230 to r = 0.349, and the
+share of land with no ink at all falls from 94.5 to 26.7 per cent.  The flattest tenth of
+the land now carries *more* ink than the middle tenth (0.2012 against 0.1300) -- not
+because the hachures reach it, but because the flattest land is coastal plain and the
+coast is inked.  That is a reminder worth keeping: on a line sheet the ink is a sum of
+several systems, and any single coefficient describes the sum, not the system.
+
+Two plates, one country, two different claims about how a map should be read.  Neither is
+a mistake; printing only one of them would be.

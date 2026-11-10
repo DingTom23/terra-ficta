@@ -299,6 +299,51 @@ def province_swatch(k, tint=0.55, relief=0.11, tints=None):
     return tuple(float(v) for v in mixed * (1.0 - relief * 0.5))
 
 
+def render_engraved(world, scale=2, contour_interval=100.0, tint=0.30,
+                    hachure_alpha=0.42):
+    """A plate where the line work carries the form.
+
+    The physical sheet lets a continuous hillshade do the modelling and adds
+    hachures as an accent; measured, those hachures cover five per cent of the
+    land and cannot carry anything.  This sheet inverts the arrangement.  The
+    contours are the height system -- complete, unambiguous, readable with a
+    key -- and the hachures are a surface texture laid on every slope, dense
+    where the ground is steep and sparse where it is gentle.  Colour is
+    withdrawn to a wash barely above the paper.
+
+    It is not "the physical plate with more strokes".  It is a different claim
+    about how a map should be read.
+    """
+    spec = world.spec
+    hh, ww = world.height.shape
+    RW, RH = ww * scale, hh * scale
+
+    h = upsample(world.height, RW, RH)
+    land_m = upsample((world.height > 0).astype(np.float32), RW, RH, Image.BILINEAR)
+    land_m = np.clip(land_m, 0.0, 1.0)
+
+    paper = np.array(PAPER, dtype=np.float32)
+    sea_rgb = bathymetric(np.maximum(-h, 0.0))
+    sea_rgb = sea_rgb * 0.35 + paper * 0.65
+
+    # A whisper of hypsometric colour: enough to group the ranges, not enough
+    # to model them.
+    land_rgb = hypsometric(np.maximum(h, 0.0)) * tint + paper * (1.0 - tint)
+
+    img = sea_rgb * (1.0 - land_m[..., None]) + land_rgb * land_m[..., None]
+
+    ink = np.array(INK, dtype=np.float32)
+    alpha, idx = contours(np.maximum(h, 0.0), interval=contour_interval,
+                          width=1.1, index_width=2.1)
+    img = _mix(img, ink, alpha * 0.46 * land_m)
+    img = _mix(img, ink, idx * 0.72 * land_m)
+
+    # Every slope, not just the steepest tenth.
+    img = draw_hachures(img, world, scale=scale, spacing=3,
+                        alpha=hachure_alpha, lo_pct=2.0, hi_pct=99.0)
+    return img, h, land_m
+
+
 def render_political(world, scale=2, tint=0.55, relief=0.11, tints=None,
                      base_colour=None):
     """A political plate: flat province washes, the relief only hinted.

@@ -409,3 +409,35 @@ def test_the_rainfall_plate_paints_every_band():
     band = np.digitize(world.climate["precipitation"], render.RAIN_LEVELS[1:])
     assert int(band.max()) <= len(render.RAIN_BANDS) - 1, \
         "a rainfall band has no entry in RAIN_BANDS"
+
+
+def test_the_engraved_plate_withdraws_the_colour():
+    """Colour is a wash on this sheet; the line is the argument."""
+    from atlas import render
+
+    world, _labels = _world_and_labels()
+    shade, _h, _l = render.render_terrain(world, scale=1)
+    line, _h, _l = render.render_engraved(world, scale=1)
+    assert float(line.mean()) > float(shade.mean()) + 0.04, \
+        "the engraved plate is not paler than the shaded one"
+
+
+def test_the_engraved_plate_inks_the_gentle_ground_too():
+    """On the physical sheet only the steep tenth is hachured, so flat ground
+    carries nothing.  Here the contours reach everywhere, and that is the
+    whole point of the plate."""
+    from atlas import render
+
+    world, _labels = _world_and_labels()
+    img, _h, _land = render.render_engraved(world, scale=1)
+    g = img.mean(axis=2)
+    elev = world.height
+    land = elev > 0
+    gy, gx = np.gradient(elev.astype(np.float64))
+    slope = np.hypot(gx, gy)
+
+    paper = float(np.median(g[~land])) if (~land).any() else 0.9
+    ink = paper - g
+    gentle = land & (slope <= np.percentile(slope[land], 33.0))
+    assert ink[gentle].mean() > 0.015, \
+        "gentle ground carries no line work, so the plate is a mountain sketch"

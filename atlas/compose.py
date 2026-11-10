@@ -119,6 +119,22 @@ def _furniture_slots():
     ]
 
 
+def _engraved_slots():
+    """A line plate keeps the same furniture as the physical one, minus the
+    biome key: there is no colour on the sheet for a key to explain."""
+    return [
+        layout.Slot("cartouche", 0.315, 0.130, bias=((0.03, 0.02), (0.97, 0.02), (0.03, 0.98)),
+                    bias_gain=1.5, sigma=0.42, shrink=0.86, min_scale=0.62),
+        layout.Slot("elevation", 0.148, 0.185, bias=((0.97, 0.98), (0.03, 0.98)),
+                    bias_gain=1.1, sigma=0.30, shrink=0.86, min_scale=0.62, min_open=0.55),
+        layout.Slot("compass", 0.115, 0.115, bias=((0.03, 0.03), (0.97, 0.03),
+                                                    (0.03, 0.97), (0.97, 0.97)),
+                    bias_gain=0.8, sigma=0.26, shrink=0.90, min_scale=0.70),
+        layout.Slot("scale", 0.230, 0.052, bias=((0.50, 0.98),), bias_gain=1.0,
+                    sigma=0.34, shrink=0.88, min_scale=0.60, min_open=0.55),
+    ]
+
+
 def _climate_slots():
     """A thematic sheet needs one key and one only: the rainfall bands."""
     return [
@@ -213,6 +229,11 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         img = render.draw_coastline(img, land_m, scale=s, strength=1.0)
         img = render.draw_borders(img, prov, land, scale=s, weight=1, alpha=0.52,
                                   dash=0, colour=(0.40, 0.28, 0.22))
+    elif mode == "engraved":
+        img, h, land_m = render.render_engraved(view, scale=s)
+        img = render.draw_lakes(img, view, scale=s, alpha=0.45)
+        img = render.draw_rivers(img, view, scale=s, alpha=0.62)
+        img = render.draw_coastline(img, land_m, scale=s)
     elif mode == "climate":
         img, h, land_m = render.render_climate(view, scale=s, base_colour=paper_c)
         # The bands carry the argument; the rivers and the coast only say
@@ -250,6 +271,8 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         slots = _political_slots()
     elif mode == "climate":
         slots = _climate_slots()
+    elif mode == "engraved":
+        slots = _engraved_slots()
     else:
         slots = _furniture_slots()
     spots = layout.place(slots,

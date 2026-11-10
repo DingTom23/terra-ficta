@@ -105,6 +105,8 @@ def main(argv=None):
                     help="also draw the same country as it stood a century earlier")
     ap.add_argument("--climate", action="store_true",
                     help="also draw a thematic plate of rainfall and isotherms")
+    ap.add_argument("--engraved", action="store_true",
+                    help="also draw the country as pure line work, without shading")
     args = ap.parse_args(argv)
 
     outdir = Path(args.outdir)
@@ -115,7 +117,7 @@ def main(argv=None):
     cards = []
     viewer_items = []
     n_plates = len(seeds) * (1 + int(bool(args.political)) + int(bool(args.ancient))
-                             + int(bool(args.climate)))
+                             + int(bool(args.climate)) + int(bool(args.engraved)))
     counter = [0]
 
     def next_plate():
@@ -165,12 +167,24 @@ def main(argv=None):
             cli_page.save(cpath)
             print(f"  -> {cpath}")
 
+        eng_page = None
+        eng_num = None
+        if args.engraved:
+            eng_num = next_plate()
+            _, _, eng_page, _ = render_sheet(
+                seed, args.width, args.height, args.scale, name,
+                plate=eng_num, mode="engraved")
+            epath = outdir / f"atlas_{seed:04d}_engraved.png"
+            eng_page.save(epath)
+            print(f"  -> {epath}")
+
         feats = features.measure(view, labels)
         title, subtitle, paras = gazetteer.describe(view, labels, name, feats)
         ents = gazetteer.entries(view, labels, feats)
         sheets.append(dict(plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
                            anc_page=anc_page, anc_plate=anc_num,
                            cli_page=cli_page, cli_plate=cli_num,
+                           eng_page=eng_page, eng_plate=eng_num,
                            title=title, subtitle=subtitle, paras=paras, labels=labels,
                            entries=ents))
         cards.append((path, title, subtitle, paras))
@@ -210,7 +224,8 @@ def _plate_count(sheets) -> int:
     """How many plates the book actually contains, not how many countries."""
     return sum(1 + (1 if s.get("pol_page") is not None else 0)
                + (1 if s.get("anc_page") is not None else 0)
-               + (1 if s.get("cli_page") is not None else 0) for s in sheets)
+               + (1 if s.get("cli_page") is not None else 0)
+               + (1 if s.get("eng_page") is not None else 0) for s in sheets)
 
 
 def _assemble_book(sheets, seeds):
@@ -247,6 +262,12 @@ def _assemble_book(sheets, seeds):
             contents.append((sheet["cli_plate"] or "",
                              sheet["title"] + " — rainfall and temperature", folio))
             body.append(book.place_plate(sheet["cli_page"]))
+
+        if sheet.get("eng_page") is not None:
+            folio += 1
+            contents.append((sheet["eng_plate"] or "",
+                             sheet["title"] + " \u2014 engraved in pure line", folio))
+            body.append(book.place_plate(sheet["eng_page"]))
 
         folio += 1
         contents.append(("", sheet["title"] + " — a survey", folio))
