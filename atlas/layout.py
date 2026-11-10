@@ -225,7 +225,13 @@ def _hits(a, b, gap=0.0) -> bool:
 
 
 def _openness_of(box, open_field) -> float:
-    """Mean openness under a box, on the coarse field."""
+    """How much open water a box sits on.
+
+    The mean is not enough: a key lying mostly over the sea with one corner
+    over a headland still averages high, and the corner prints on the land.
+    Score the mean but weigh the worst tenth of the box as heavily, so a box
+    that touches the coast at all is pushed back into open water.
+    """
     x0, y0, x1, y1 = box
     ny, nx = open_field.shape
     jx0 = int(np.clip(x0 * nx, 0, nx - 1))
@@ -233,7 +239,9 @@ def _openness_of(box, open_field) -> float:
     jy0 = int(np.clip(y0 * ny, 0, ny - 1))
     jy1 = int(np.clip(y1 * ny, 0, ny))
     patch = open_field[jy0:max(jy1, jy0 + 1), jx0:max(jx1, jx0 + 1)]
-    return float(patch.mean()) if patch.size else 0.0
+    if not patch.size:
+        return 0.0
+    return 0.55 * float(patch.mean()) + 0.45 * float(np.percentile(patch, 10))
 
 
 def _score(box, open_field, bias_points, bias_gain: float, sigma: float,

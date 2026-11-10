@@ -117,7 +117,8 @@ def _river_angle(rec, x, y, ww, steps=12):
 
 
 def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
-                 n_towns=24, n_rivers=3, width=None, height=None, avoid=()):
+                 n_towns=24, n_rivers=3, width=None, height=None, avoid=(),
+                 name_prov=None):
     """Return a priority-ordered list of labels in map-cell coordinates."""
     h = world.height
     hh, ww = h.shape
@@ -135,15 +136,26 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
     used = {a.strip().upper() for a in avoid}
 
     def unique(fn):
-        for _ in range(60):
-            name = fn()
+        # `fn` takes the attempt number, so a retry draws a different name
+        # from a generator that is otherwise fixed by the feature's identity.
+        name = ""
+        for k in range(60):
+            name = fn(k)
             if name.upper() not in used:
                 used.add(name.upper())
                 return name
         return name
 
+    def named(key, culture, kind, **kw):
+        """One name, from a generator that depends only on what is named."""
+        return namer.derive(key)
+
     # --- regions --------------------------------------------------------
     prov = getattr(world, "provinces", None)
+    # Towns and rivers take their language from `name_prov`, which on an
+    # older sheet is the modern partition: the borders move, the places do
+    # not.
+    naming = prov if name_prov is None else name_prov
     if prov is not None:
         # Place the biggest province first, then let each one dodge the names
         # already on the sheet.  Without the dodge, six provinces whose
@@ -178,7 +190,7 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
             # named in: everything inside province j must speak culture j.
             culture = cultures[int(j) % len(cultures)]
             labels.append(Label(
-                text=unique(lambda: namer.place(culture, "region").upper()),
+                text=unique(lambda k: namer.derive(("region", int(j), k)).place(culture, "region").upper()),
                 x=float(xs[i]), y=float(ys[i]), kind="region", size=30,
                 tracking=5.0, priority=3, prov=int(j), culture=int(j) % len(cultures),
             ))
@@ -196,7 +208,7 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
                 continue
             culture = cultures[j % len(cultures)]
             labels.append(Label(
-                text=unique(lambda: namer.place(culture, "region").upper()),
+                text=unique(lambda k: namer.derive(("region", int(j), k)).place(culture, "region").upper()),
                 x=spot[0], y=spot[1], kind="region", size=30,
                 tracking=5.0, priority=3,
             ))
@@ -216,7 +228,8 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
                 continue
             culture = cultures[(j + 2) % len(cultures)]
             labels.append(Label(
-                text=namer.place(culture, "water", suffix=False),
+                text=namer.derive(("water", round(spot[0]), round(spot[1])))
+                     .place(culture, "water", suffix=False),
                 x=spot[0], y=spot[1], kind="water", size=26,
                 tracking=3.0, priority=2,
             ))
@@ -238,7 +251,8 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
                     continue
                 culture = cultures[(j + 1) % len(cultures)]
                 labels.append(Label(
-                    text=namer.place(culture, "range", suffix=False).upper(),
+                    text=namer.derive(("range", round(spot[0]), round(spot[1])))
+                     .place(culture, "range", suffix=False).upper(),
                     x=spot[0], y=spot[1], kind="range", size=20,
                     tracking=4.0, priority=4,
                 ))
@@ -294,9 +308,10 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
         # province's language.  Numbering the towns and cycling the cultures
         # gave a country where every neighbouring village spoke a different
         # tongue and the province name matched neither of them.
-        ci = _culture_index(prov, cultures, x, y, fallback=i)
+        ci = _culture_index(naming, cultures, x, y, fallback=i)
         labels.append(Label(
-            text=unique(lambda: namer.place(cultures[ci], "town", suffix=True)),
+            text=unique(lambda k: namer.derive(("town", round(x), round(y), k))
+                               .place(cultures[ci], "town", suffix=True)),
             x=float(x), y=float(y), kind="town", size=15, priority=6, dot=True,
             rank=ranks[i], prov=int(prov[int(y), int(x)]) if prov is not None else -1,
             culture=ci,
@@ -317,9 +332,10 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
             spot = _snap(rys[m], rxs[m], land, acc)
             if spot is None:
                 continue
-            ci = _culture_index(prov, cultures, spot[0], spot[1], fallback=j + 3)
+            ci = _culture_index(naming, cultures, spot[0], spot[1], fallback=j + 3)
             labels.append(Label(
-                text=unique(lambda: namer.place(cultures[ci], "river", suffix=False)),
+                text=unique(lambda k: namer.derive(("river", round(spot[0]), round(spot[1]), k))
+                               .place(cultures[ci], "river", suffix=False)),
                 x=spot[0], y=spot[1], kind="river", size=15,
                 tracking=1.5,
                 angle=_river_angle(rec.ravel(), spot[0], spot[1], ww),

@@ -367,3 +367,45 @@ def test_the_climate_plate_is_a_third_kind_of_sheet():
     q = (np.clip(img, 0, 1) * 255).astype(np.uint8)
     flat_share = 1.0 - len(np.unique(q.reshape(-1, 3), axis=0)) / float(q.shape[0] * q.shape[1])
     assert flat_share > 0.90, "the climate plate is not banded"
+
+
+def test_every_plate_shows_the_same_country():
+    """Geography does not change when the sheet does.
+
+    Roads and dictionary entries used to be built from the labels that
+    survived placement, so a town whose name did not fit vanished from the
+    road network -- and a different set of keys on another plate could change
+    which towns existed.  A country has one set of towns.
+    """
+    from atlas.compose import compose
+    from atlas.naming import Namer
+
+    world, _labels = _world_and_labels()
+    seen = {}
+    for mode in ("physical", "political", "ancient", "climate"):
+        _page, labels, _view = compose(world, Namer(world.spec.seed), title="T",
+                                       mode=mode, target_px=900)
+        seen[mode] = tuple(sorted(l.text for l in labels if l.kind == "town"))
+
+    assert len(set(seen.values())) == 1, \
+        "the four plates disagree about which towns exist: " + \
+        ", ".join(f"{k}={len(v)}" for k, v in seen.items())
+    assert len(seen["physical"]) >= 10
+
+
+def test_the_rainfall_plate_paints_every_band():
+    """A band with no colour prints black, and black is not in the key."""
+    from atlas import render
+
+    world, _labels = _world_and_labels()
+    img, _h, land = render.render_climate(world, scale=1)
+    on_land = img[land > 0.5]
+    # The darkest real band is a deep teal, so "dark" proves nothing; a band
+    # with no colour is painted pure black, which no band colour comes near.
+    unpainted = int((on_land.max(axis=1) < 0.05).sum())
+    assert unpainted == 0, \
+        f"{unpainted} land pixels are black, i.e. a band with no colour"
+
+    band = np.digitize(world.climate["precipitation"], render.RAIN_LEVELS[1:])
+    assert int(band.max()) <= len(render.RAIN_BANDS) - 1, \
+        "a rainfall band has no entry in RAIN_BANDS"

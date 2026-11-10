@@ -174,7 +174,8 @@ def _ice(sea_rgb, land_rgb, ice, fast, pack, shade, seed):
     return sea_rgb, land_rgb, frozen
 
 
-def render_terrain(world, scale=2, z_factor=340.0, contour_interval=200.0):
+def render_terrain(world, scale=2, z_factor=340.0, contour_interval=200.0,
+                   shade_weight=1.0):
     spec = world.spec
     hh, ww = world.height.shape
     RW, RH = ww * scale, hh * scale
@@ -197,8 +198,14 @@ def render_terrain(world, scale=2, z_factor=340.0, contour_interval=200.0):
 
     sea_rgb = bathymetric(np.maximum(-h, 0.0))
     land_rgb = hypsometric(np.maximum(h, 0.0))
-    land_rgb = land_rgb * (0.52 + 0.74 * shade * (0.74 + 0.26 * ao))[..., None]
-    land_rgb = land_rgb * (1.0 - 0.34 * engrave)[..., None]
+    # `shade_weight` exists so the relief can be turned off and the line work
+    # judged on its own: if the sheet still reads as terrain without the
+    # continuous shading, the hachures are carrying the form; if it goes flat,
+    # they are decoration and the shading is doing all the work.
+    lit = 0.52 + 0.74 * shade * (0.74 + 0.26 * ao)
+    lit = (1.0 - shade_weight) + shade_weight * lit
+    land_rgb = land_rgb * lit[..., None]
+    land_rgb = land_rgb * (1.0 - 0.34 * shade_weight * engrave)[..., None]
 
     # Biomes colour the lowlands and fade out at the treeline, where the
     # hypsometric ramp takes over again.  Above about 1400 m the rock is the
@@ -383,15 +390,34 @@ def draw_rivers(img, world, scale=2, min_cells=400, colour=INK_RIVER, alpha=0.85
     ys, xs = ys[order], xs[order]
     amax = float(acc.max())
 
+    # A river drawn cell-centre to cell-centre steps in eight directions and
+    # reads as a staircase.  Draw each cell's stretch between the midpoint of
+    # the edge it entered by and the midpoint of the edge it leaves by: the
+    # pieces meet, and the polyline runs through edge midpoints -- which is a
+    # Chaikin corner-cut done once, without building the chains.
+    flat_acc = acc.ravel()
+    idx = np.where(rec >= 0)[0]
+    idx = idx[np.argsort(flat_acc[idx])]
+    parent = np.full(hh * ww, -1, dtype=np.int64)
+    parent[rec[idx]] = idx
+
     for y, x in zip(ys, xs):
-        r = rec[y * ww + x]
+        i = y * ww + x
+        r = rec[i]
         if r < 0:
             continue
         ry, rx = divmod(int(r), ww)
+        pj = parent[i]
+        if pj >= 0:
+            py, px = divmod(int(pj), ww)
+            ax, ay = (x + px) * 0.5, (y + py) * 0.5
+        else:
+            ax, ay = float(x), float(y)
+        bx, by = (x + rx) * 0.5, (y + ry) * 0.5
         a = acc[y, x]
         w = 1.0 + 2.6 * (np.log1p(a / min_cells) / np.log1p(amax / min_cells))
         w = max(1.0, w * scale * 0.62)
-        d.line([(x * scale, y * scale), (rx * scale, ry * scale)],
+        d.line([(ax * scale, ay * scale), (bx * scale, by * scale)],
                fill=255, width=int(round(w)))
 
     a = np.asarray(mask, dtype=np.float32)[..., None] / 255.0
@@ -663,7 +689,11 @@ def render_climate(world, scale=2, relief=0.26, base_colour=None):
         # full-resolution field gives a curve.
         p_hi = blur(upsample(rain.astype(np.float32), RW, RH),
                     max(1.0, 1.6 * scale), passes=2)
-        band = np.digitize(p_hi, RAIN_LEVELS)
+        # RAIN_LEVELS[0] is the floor of the first band, not a break between
+        # two of them: digitising against the whole list returns 0..8 and
+        # every band then takes its neighbour's colour, while the last band
+        # matches no colour at all and is left black.
+        band = np.digitize(p_hi, RAIN_LEVELS[1:])
         flat = np.zeros((RH, RW, 3), dtype=np.float32)
         for k, colour in enumerate(RAIN_BANDS):
             flat[band == k] = colour

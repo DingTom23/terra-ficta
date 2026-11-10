@@ -74,9 +74,27 @@ def make_cultures(seed: int, count: int = 5):
 
 class Namer:
     def __init__(self, seed: int):
+        self.seed = seed
         self.rng = np.random.default_rng(seed * 977 + 13)
         self.cultures = make_cultures(seed)
         self._used = set()
+
+    def derive(self, key):
+        """A generator for one name, seeded by that name's own identity.
+
+        Drawing every name from one running generator makes each name depend
+        on how many names came before it.  Add a province and every town in
+        the country is renamed -- which is exactly what happened when the
+        ancient sheet partitioned the same ground into seven provinces
+        instead of five.  A name must depend on what it names.
+        """
+        child = object.__new__(Namer)
+        h = sum((i + 1) * ord(c) for i, c in enumerate(repr(key))) % (2 ** 31)
+        child.seed = self.seed
+        child.rng = np.random.default_rng((self.seed * 1000003 + h) % (2 ** 63))
+        child.cultures = self.cultures
+        child._used = set()
+        return child
 
     def word(self, culture: Culture, syllables: int | None = None) -> str:
         lo, hi = culture.syllables

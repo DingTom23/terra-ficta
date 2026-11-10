@@ -587,6 +587,63 @@ puts the number on the sheet, and the moment the six sheets are laid side by
 side the missing term is obvious.  Building the plate found the bug; the plate
 was not the point.
 
+## 28. A place must not depend on the sheet
+
+A reviewer found the deepest bug in the project, and it was architectural
+rather than visual.  The order of work was: build labels, place them, and then
+build the roads from the towns that survived placement.  The dictionary was
+measured from the same surviving list.  So a town whose name did not fit on a
+sheet had no road, no dictionary entry and no index entry -- and because each
+plate carries a different set of keys, the four plates of one country could
+disagree about which towns existed at all.
+
+Two things followed from the fix, and the second was worse than the first.
+
+The first was mechanical: roads are built from every town in the country, and
+the composer returns the whole country rather than the part of it that fitted.
+
+The second was a name bug hiding behind the first.  Every name came from one
+running generator, so each name depended on how many names had been drawn
+before it.  The ancient sheet partitions the same ground into seven provinces
+instead of five; two extra province names advanced the generator, and every
+town in the country was renamed.  The same country, a century earlier, with
+different towns in it -- which is not a century earlier, it is a different
+country.
+
+The fix is that a name depends on what it names and nothing else:
+`Namer.derive(key)` returns a generator seeded by the feature's own identity
+-- its kind and its position on the ground.  Move a province and the towns keep
+their names, because the towns did not move.
+
+The general rule: **geography is what exists; cartography is what is printed.**
+Anything downstream of "did the label fit" is a rendering artefact, and a
+rendering artefact must never reach the dictionary.
+
+## 29. The hachures are a highlight, not a relief
+
+A reviewer asked the question the plate could not answer: switch off the
+continuous shading and see whether the line work still carries the form.  It
+does not, and the measurement says why.
+
+Isolating the ink the hachures add (the shaded sheet minus the same sheet
+without them), and correlating it against the true slope:
+
+- steepest tenth of the land: 0.0081 of darkening
+- middle: 0.0012
+- flattest tenth: 0.0002
+
+So the hachures *do* follow the slope -- a factor of fifty from flat to steep --
+but they are gated to the steepest ground and **94.5 per cent of the land
+receives no hachure at all**.  They are a highlight laid on the mountains, not a
+system for reading relief.  The hillshade is what makes the plate legible; the
+lines decorate the part that is already legible.
+
+That is not a bug to fix by drawing more strokes.  A sheet where lines carry the
+form needs a different system -- strokes that follow the fall line across every
+slope, spaced by gradient, drawn at a constant blackness -- and that is a
+different plate, not a denser version of this one.  What this plate has is an
+engraved *accent*, and it should be described as one.
+
 ## Smaller decisions worth recording
 
 **The border is a measuring instrument.** A graduated chequer band outside the neat

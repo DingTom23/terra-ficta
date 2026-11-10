@@ -184,6 +184,10 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     # so the country is recognisable and the map is not: a reader can lay the
     # two sheets side by side and see what changed hands.
     tints = None
+    # The provinces a town belongs to decide which language named it.  On the
+    # ancient sheet the provinces are redrawn, but the towns are the same
+    # towns: a village does not change its name because a border moved.
+    name_prov = getattr(view, "provinces", None)
     if mode == "ancient":
         alt, _mouths = regions.provinces(view.height, view.drainage["receivers"],
                                          k=min(9, int(vspec.provinces) + 2),
@@ -281,7 +285,7 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         sub = f"surveyed in the year {roman(1800 + (spec.seed % 99))}"
 
     # --- names ----------------------------------------------------------
-    labels = build_labels(view, namer, avoid=(name,))
+    labels = build_labels(view, namer, avoid=(name,), name_prov=name_prov)
     for lb in labels:
         face, frac, track_f = STYLES[lb.kind]
         px = max(10, int(frac * RW))
@@ -313,11 +317,11 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     prov_grid = getattr(view, "provinces", None)
     if prov_grid is not None:
         seats = {}
-        for lb in placed:
+        for lb in labels:
             if lb.kind != "region" or lb.prov < 0:
                 continue
             best, best_key = None, (9, 1e18)
-            for t in placed:
+            for t in labels:
                 if t.kind != "town":
                     continue
                 ty, tx = int(t.y), int(t.x)
@@ -334,8 +338,11 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         for t in seats.values():
             t.capital = True
 
-    # --- roads, from the towns that survived placement -------------------
-    towns = [(lb.x, lb.y) for lb in placed if lb.kind == "town"]
+    # --- roads -----------------------------------------------------------
+    # From every town in the country, not from the ones whose names fitted.
+    # A road that appears or vanishes because a label was dropped is not a
+    # road, it is a rendering artefact -- and the dictionary would inherit it.
+    towns = [(lb.x, lb.y) for lb in labels if lb.kind == "town"]
     paths = roadmod.build_roads(towns, view.height, land)
     paths = [roadmod.smooth(p, window=7) for p in paths]
     img = render.draw_roads(img, paths, scale=s)
@@ -456,12 +463,12 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     rain_box = to_page(spots["rain"]) if "rain" in spots else None
     if mode == "climate" and rain_box:
         levels = render.RAIN_LEVELS
-        labels = []
+        legend_rows = []
         for i, colour in enumerate(render.RAIN_BANDS):
             lo = int(levels[i])
             hi = int(levels[i + 1]) if i + 1 < len(levels) else None
-            labels.append((colour, f"{lo}-{hi}" if hi is not None else f"over {lo}"))
-        decor.draw_legend(draw, rain_box, labels, ink, paper_rgb,
+            legend_rows.append((colour, f"{lo}-{hi}" if hi is not None else f"over {lo}"))
+        decor.draw_legend(draw, rain_box, legend_rows, ink, paper_rgb,
                           title="RAINFALL, MM", size=max(9, int(M * 0.100)))
 
     if biome is not None and biome_box and mode != "climate":
@@ -484,4 +491,7 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
             decor.draw_legend(draw, prov_box, entries[:8], ink, paper_rgb,
                               title="PROVINCES", size=max(9, int(M * 0.105)))
 
-    return page, placed, view
+    # The whole country, not just the names that fitted on this sheet: the
+    # caller measures the geography, and geography does not change when a
+    # label is dropped or when this plate carries a different set of keys.
+    return page, labels, view
