@@ -43,13 +43,38 @@ def latitude_grid(spec: WorldSpec):
 
 
 def temperature(lat, elev_m):
-    """Degrees Celsius at the surface."""
-    base = 31.0 - 0.62 * np.abs(lat)
+    """Annual mean degrees Celsius at the surface.
+
+    The latitude term is a quadratic rather than a straight line because the
+    real one is: 26 degrees at the equator, 18 at thirty, 10 at forty-five,
+    nothing at sixty, minus twelve at seventy-five.  A straight line through
+    the first and last of those puts the tropics five degrees too cold and
+    the horse latitudes eight too cold, and a climate plate states the number,
+    so the number has to be one a reader would recognise.
+    """
+    a = np.abs(lat)
+    base = 26.0 - 0.10 * a - 0.0055 * a * a
     return base - elev_m * 0.0065
 
 
-def moisture(spec: WorldSpec, height, relief, wind_from=250.0):
-    """Precipitation in millimetres, from distance to sea and orography."""
+def zonal(lat):
+    """The general circulation, as a multiplier on rainfall.
+
+    Wet where the trades converge at the equator, dry under the subtropical
+    highs near twenty-five degrees, wet again in the westerlies near fifty,
+    drier toward the pole.  Without this term every country in the book has
+    the same rainfall whatever latitude it was given -- which is the one thing
+    a climate plate must never show.
+    """
+    a = np.abs(lat)
+    return (1.0
+            + 2.10 * np.exp(-(a / 13.0) ** 2)
+            - 0.80 * np.exp(-((a - 25.0) / 9.5) ** 2)
+            + 0.60 * np.exp(-((a - 49.0) / 13.0) ** 2))
+
+
+def moisture(spec: WorldSpec, height, relief, lat=None, wind_from=250.0):
+    """Precipitation in millimetres, from the circulation, the sea and orography."""
     gy, gx = np.gradient(height.astype(np.float64))
 
     # Where the wind goes, in image coordinates (x east, y south).
@@ -69,8 +94,10 @@ def moisture(spec: WorldSpec, height, relief, wind_from=250.0):
     inland_km = np.clip(relief, 0.0, None) * 4200.0
     decay = np.exp(-inland_km / 900.0)
 
-    base = 1300.0
+    base = 900.0
     p = base * (0.24 + 0.76 * decay)
+    if lat is not None:
+        p = p * zonal(lat)
     p = p * (1.0 + 1.9 * lift) * (1.0 - 0.66 * shadow)
     return np.clip(p, 12.0, 4200.0)
 
@@ -147,7 +174,7 @@ def derive(world):
 
     lat = latitude_grid(spec)
     temp = temperature(lat, np.maximum(h, 0.0))
-    precip = moisture(spec, h, relief)
+    precip = moisture(spec, h, relief, lat)
     biome = classify(temp, precip, np.maximum(h, 0.0))
     biome = np.where(h > 0, biome, 255)
 

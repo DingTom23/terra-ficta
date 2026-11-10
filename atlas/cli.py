@@ -103,6 +103,8 @@ def main(argv=None):
                     help="also draw a political plate for every world")
     ap.add_argument("--ancient", action="store_true",
                     help="also draw the same country as it stood a century earlier")
+    ap.add_argument("--climate", action="store_true",
+                    help="also draw a thematic plate of rainfall and isotherms")
     args = ap.parse_args(argv)
 
     outdir = Path(args.outdir)
@@ -112,7 +114,8 @@ def main(argv=None):
     sheets = []
     cards = []
     viewer_items = []
-    n_plates = len(seeds) * (1 + int(bool(args.political)) + int(bool(args.ancient)))
+    n_plates = len(seeds) * (1 + int(bool(args.political)) + int(bool(args.ancient))
+                             + int(bool(args.climate)))
     counter = [0]
 
     def next_plate():
@@ -151,11 +154,23 @@ def main(argv=None):
             anc_page.save(apath)
             print(f"  -> {apath}")
 
+        cli_page = None
+        cli_num = None
+        if args.climate:
+            cli_num = next_plate()
+            _, _, cli_page, _ = render_sheet(
+                seed, args.width, args.height, args.scale, name,
+                plate=cli_num, mode="climate")
+            cpath = outdir / f"atlas_{seed:04d}_climate.png"
+            cli_page.save(cpath)
+            print(f"  -> {cpath}")
+
         feats = features.measure(view, labels)
         title, subtitle, paras = gazetteer.describe(view, labels, name, feats)
         ents = gazetteer.entries(view, labels, feats)
         sheets.append(dict(plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
                            anc_page=anc_page, anc_plate=anc_num,
+                           cli_page=cli_page, cli_plate=cli_num,
                            title=title, subtitle=subtitle, paras=paras, labels=labels,
                            entries=ents))
         cards.append((path, title, subtitle, paras))
@@ -194,7 +209,8 @@ def main(argv=None):
 def _plate_count(sheets) -> int:
     """How many plates the book actually contains, not how many countries."""
     return sum(1 + (1 if s.get("pol_page") is not None else 0)
-               + (1 if s.get("anc_page") is not None else 0) for s in sheets)
+               + (1 if s.get("anc_page") is not None else 0)
+               + (1 if s.get("cli_page") is not None else 0) for s in sheets)
 
 
 def _assemble_book(sheets, seeds):
@@ -226,6 +242,11 @@ def _assemble_book(sheets, seeds):
             contents.append((sheet["anc_plate"] or "",
                              sheet["title"] + " — as it stood a century earlier", folio))
             body.append(book.place_plate(sheet["anc_page"]))
+        if sheet.get("cli_page") is not None:
+            folio += 1
+            contents.append((sheet["cli_plate"] or "",
+                             sheet["title"] + " — rainfall and temperature", folio))
+            body.append(book.place_plate(sheet["cli_page"]))
 
         folio += 1
         contents.append(("", sheet["title"] + " — a survey", folio))

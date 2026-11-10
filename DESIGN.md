@@ -523,6 +523,70 @@ no ruined cities, no "here the old kingdom fell".  It shows a political
 arrangement and lets the reader notice that the arrangement is not the one on the
 facing plate.
 
+## 26. A thematic plate is an argument, not a surface
+
+The physical plate models a surface; the political plate partitions one.  The
+climate plate *interprets* one, and an interpretation has to be stated as a
+number -- which changes the whole grammar of the sheet.
+
+**Bands, not a ramp.**  A hypsometric ramp says "higher" and leaves the reader to
+supply the figure from the key.  A rainfall map says "between 700 and 1,000
+millimetres", and the band edge is the claim.  So the land is quantised into
+eight bands with hard edges, and the edges are drawn as isohyets.  Quantising a
+continuous field looks like a step backwards until you notice that the step *is*
+the information: the line is where the rain changes, and the reader can point at
+it.
+
+**Band the smooth field, not the grid.**  The first attempt banded the terrain
+grid and upsampled the result, which gave a staircase at every boundary.  Banding
+a blurred full-resolution field gives a curve, because the curve is where the
+*interpolated* value crosses the break.  Same data, same breaks, different line.
+
+**Two hands, two colours.**  Rainfall is drawn blue and temperature red, and the
+isotherms are broken while the isohyets are solid.  Colour alone is not enough --
+a reader with a colour-blind eye, or a reader looking at a photocopy, must still
+be able to tell which system of lines is which.
+
+**The temperature had to be fixed before it could be drawn.**  The old model was
+`31 - 0.62 * latitude`, a straight line that puts the equator at 31 degrees and
+sixty north at minus six: it is too cold in the tropics and far too cold in the
+horse latitudes.  A hypsometric plate hides that, because nobody reads a number
+off a tint.  A climate plate states the number, so the model had to become one a
+reader would recognise: 26 at the equator, 18 at thirty, 10 at forty-five,
+nothing at sixty, minus twelve at seventy-five -- a quadratic, because the real
+curve is one.
+
+The lesson generalises.  A new *kind* of sheet is a test of the model underneath
+it: the political plate tested the province partition, the ancient plate tested
+whether history could be generated rather than decorated, and the climate plate
+tested the climate.  Two of the three found something.
+
+## 27. Rainfall has to know where it is
+
+Giving each country its own latitude band was supposed to make the six of them
+different.  It did not: measured across the six, the rainfall came out at a
+median of 500 mm everywhere, with the tenth percentile at 270 and the ninetieth
+at 1,200 in every single country.  The reason was one missing term.  The
+moisture model knew about distance from the sea, about upslope lift and about
+rain shadow -- all of which are local -- and nothing at all about the general
+circulation, which is the one thing that is not local.
+
+The circulation is a banded thing: wet where the trades converge at the equator,
+dry under the subtropical highs near twenty-five degrees, wet again in the
+westerlies near fifty.  Adding it as a multiplier on the rainfall -- a sum of
+three Gaussians in latitude -- changed every country's climate at once.  The
+country at 30 to 46 degrees north became a steppe, 41 per cent of it, with a
+median of 387 mm; the one at 47 to 63 became boreal forest and tundra with a
+median of 519.  Same terrain model, same seed machinery, same code -- a term
+that knows where the country is.
+
+The lesson is about what a *thematic* plate is for.  A hypsometric plate cannot
+tell you that the climate model is latitude-blind, because a tint carries no
+number and every country's tint looks plausible on its own.  A rainfall plate
+puts the number on the sheet, and the moment the six sheets are laid side by
+side the missing term is obvious.  Building the plate found the bug; the plate
+was not the point.
+
 ## Smaller decisions worth recording
 
 **The border is a measuring instrument.** A graduated chequer band outside the neat

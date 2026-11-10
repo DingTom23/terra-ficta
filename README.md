@@ -43,6 +43,7 @@ finished plate:
 | **The physical sheet** | hypsometric tints, hillshade, jittered slope hachures drawn down the fall line, contours, coastal hachures, soundings, rhumb lines, graticule, graduated chequer border, compass, scale, two keys, cartouche, plate number |
 | **The political sheet** | the same country flat-washed by province, boundaries drawn solid, a numbered key, and the relief dropped to a whisper |
 | **The ancient sheet** | the same ground a century earlier: the borders redrawn from a different partition of the same watersheds, the provinces renamed, the pigments browned and the paper darkened, so the two sheets can be read side by side |
+| **The climate sheet** | a thematic plate: annual rainfall in eight bands, its limits drawn as isohyets, the annual isotherms broken in red over them, and a key that states the numbers |
 | **The dictionary** | one alphabetical entry per named place, set in two columns, every figure in it measured off the terrain: rank, population, elevation, distance inland, the river it stands on, the range it rises in, the sea it reaches |
 | **The book** | title page, colophon, contents with dot leaders, numbered plates, a survey and a dictionary per country, an index of names whose folios point at the entries |
 
@@ -64,6 +65,9 @@ python -m atlas --seeds 1-6 --political --gallery --viewer --book out/atlas.pdf
 
 # the same, plus every country as it stood a century earlier
 python -m atlas --seeds 1-6 --political --ancient --gallery --viewer --book out/atlas.pdf
+
+# the full book: four plates a country
+python -m atlas --seeds 1-6 --political --ancient --climate --gallery --viewer --book out/atlas.pdf
 
 # smaller paper, faster iteration
 python -m atlas --seed 7 --width 900 --height 600 --scale 2

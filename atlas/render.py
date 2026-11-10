@@ -593,6 +593,110 @@ def draw_hachures(img, world, scale=2, spacing=4, colour=None, alpha=0.34,
     return _mix(img, c, a * alpha)
 
 
+# Annual rainfall in millimetres, banded at the breaks a nineteenth-century
+# climatologist would have recognised, and coloured from sand to deep green
+# rather than through a rainbow: a thematic sheet states numbers, and a
+# rainbow states nothing.
+RAIN_LEVELS = (0.0, 200.0, 400.0, 700.0, 1000.0, 1500.0, 2200.0, 3200.0)
+
+RAIN_BANDS = [
+    (0.900, 0.866, 0.726),
+    (0.874, 0.840, 0.668),
+    (0.818, 0.818, 0.602),
+    (0.716, 0.800, 0.582),
+    (0.592, 0.756, 0.570),
+    (0.464, 0.694, 0.570),
+    (0.368, 0.624, 0.556),
+    (0.294, 0.544, 0.530),
+]
+
+HEAT_LEVELS = (-20.0, -10.0, 0.0, 10.0, 20.0, 30.0)
+
+
+def _band_edges(band):
+    """Where a quantised field changes value: the line between two bands."""
+    edge = np.zeros(band.shape, dtype=bool)
+    edge[:-1] |= band[:-1] != band[1:]
+    edge[:, :-1] |= band[:, :-1] != band[:, 1:]
+    return edge.astype(np.float32)
+
+
+def render_climate(world, scale=2, relief=0.26, base_colour=None):
+    """A climate plate: rainfall as bands, its limits as isohyets, and the
+    annual isotherms laid over them in a second hand.
+
+    A third kind of sheet.  The physical plate models a surface and the
+    political plate partitions it; a thematic plate *interprets* it, and an
+    interpretation has to be stated as a number.  So this one carries bands and
+    lines rather than tints and boundaries, and the two hands are distinguished
+    by colour: blue for water, red for heat.
+    """
+    spec = world.spec
+    hh, ww = world.height.shape
+    RW, RH = ww * scale, hh * scale
+
+    h = upsample(world.height, RW, RH)
+    hn = h / spec.meters
+    shade = hillshade(hn, z_factor=340.0 * scale, azimuth=315.0, altitude=40.0)
+
+    land_m = upsample((world.height > 0).astype(np.float32), RW, RH, Image.BILINEAR)
+    land_m = np.clip(land_m, 0.0, 1.0)
+
+    clim = getattr(world, "climate", None) or {}
+    rain = clim.get("precipitation")
+    temp = clim.get("temperature")
+
+    base = np.array(base_colour or PAPER, dtype=np.float32)
+
+    # The sea is one flat wash.  A rainfall map has nothing to say about the
+    # water, and any gradient there competes with the bands on the land.
+    sea_rgb = np.ones((RH, RW, 3), dtype=np.float32) * np.array(
+        [0.838, 0.864, 0.874], dtype=np.float32)
+
+    land_rgb = np.ones((RH, RW, 3), dtype=np.float32) * base
+    iso_rain = np.zeros((RH, RW), dtype=np.float32)
+    iso_temp = np.zeros((RH, RW), dtype=np.float32)
+
+    if rain is not None:
+        # Blur the field, then band it.  Banding the terrain grid and
+        # upsampling afterwards gives a staircase; banding a smooth
+        # full-resolution field gives a curve.
+        p_hi = blur(upsample(rain.astype(np.float32), RW, RH),
+                    max(1.0, 1.6 * scale), passes=2)
+        band = np.digitize(p_hi, RAIN_LEVELS)
+        flat = np.zeros((RH, RW, 3), dtype=np.float32)
+        for k, colour in enumerate(RAIN_BANDS):
+            flat[band == k] = colour
+        land_rgb = flat * (1.0 - relief + relief * shade)[..., None]
+        iso_rain = _band_edges(band)
+
+    if temp is not None:
+        t_hi = blur(upsample(temp.astype(np.float32), RW, RH),
+                    max(1.0, 2.2 * scale), passes=2)
+        iso_temp = _band_edges(np.digitize(t_hi, HEAT_LEVELS))
+
+    climate_ice = clim.get("ice")
+    if climate_ice is not None and climate_ice.any():
+        sea_rgb, land_rgb, _frozen = _ice(
+            sea_rgb, land_rgb, climate_ice, clim.get("fast_ice"),
+            clim.get("pack_ice"), shade, spec.seed)
+
+    img = sea_rgb * (1.0 - land_m[..., None]) + land_rgb * land_m[..., None]
+
+    ink = np.array(INK, dtype=np.float32)
+    cool = np.array([0.30, 0.42, 0.54], dtype=np.float32)
+    warm = np.array([0.56, 0.30, 0.24], dtype=np.float32)
+    img = _mix(img, cool, iso_rain * 0.50 * land_m)
+
+    # Isotherms are broken, so the eye never confuses the two hands.  A solid
+    # red line over a solid blue line reads as one system of lines in two
+    # colours; a broken one reads as a second system.
+    comb = (((np.arange(RH)[:, None] + np.arange(RW)[None, :]) % 9) < 5).astype(np.float32)
+    img = _mix(img, warm, iso_temp * 0.42 * land_m * comb)
+
+    return img, h, land_m
+
+
 def render(world, scale=2, paper_tone=1.0):
     img, h, land_m = render_terrain(world, scale=scale)
     img = draw_hachures(img, world, scale=scale)

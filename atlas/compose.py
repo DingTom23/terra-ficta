@@ -119,6 +119,25 @@ def _furniture_slots():
     ]
 
 
+def _climate_slots():
+    """A thematic sheet needs one key and one only: the rainfall bands."""
+    return [
+        layout.Slot("cartouche", 0.315, 0.130,
+                    bias=((0.16, 0.10), (0.84, 0.10), (0.16, 0.86)),
+                    bias_gain=0.55, sigma=0.20, shrink=0.82, min_scale=0.55),
+        layout.Slot("rain", 0.185, 0.290,
+                    bias=((0.10, 0.55), (0.90, 0.55), (0.10, 0.86)),
+                    bias_gain=0.60, sigma=0.22, shrink=0.85, min_scale=0.60,
+                    min_open=0.55),
+        layout.Slot("compass", 0.115, 0.115,
+                    bias=((0.12, 0.12), (0.88, 0.12), (0.12, 0.88), (0.88, 0.88)),
+                    bias_gain=0.50, sigma=0.16, shrink=0.85, min_scale=0.55),
+        layout.Slot("scale", 0.230, 0.052,
+                    bias=((0.50, 0.95),), bias_gain=0.45, sigma=0.30,
+                    shrink=0.90, min_scale=0.70, min_open=0.55),
+    ]
+
+
 def _political_slots():
     return [
         layout.Slot("cartouche", 0.315, 0.130,
@@ -190,6 +209,14 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         img = render.draw_coastline(img, land_m, scale=s, strength=1.0)
         img = render.draw_borders(img, prov, land, scale=s, weight=1, alpha=0.52,
                                   dash=0, colour=(0.40, 0.28, 0.22))
+    elif mode == "climate":
+        img, h, land_m = render.render_climate(view, scale=s, base_colour=paper_c)
+        # The bands carry the argument; the rivers and the coast only say
+        # where the argument is.  Anything louder than that competes with the
+        # isohyets and the plate stops being readable as numbers.
+        img = render.draw_lakes(img, view, scale=s, colour=(0.42, 0.56, 0.64), alpha=0.45)
+        img = render.draw_rivers(img, view, scale=s, alpha=0.42)
+        img = render.draw_coastline(img, land_m, scale=s, strength=1.0)
     else:
         img, h, land_m = render.render_terrain(view, scale=s)
         img = render.draw_hachures(img, view, scale=s)
@@ -215,8 +242,13 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
 
     # --- furniture, placed before the names so the names can dodge it -----
     open_field = layout.openness(land)
-    spots = layout.place(_political_slots() if mode in ("political", "ancient")
-                         else _furniture_slots(),
+    if mode in ("political", "ancient"):
+        slots = _political_slots()
+    elif mode == "climate":
+        slots = _climate_slots()
+    else:
+        slots = _furniture_slots()
+    spots = layout.place(slots,
                          open_field)
 
     def to_page(b):
@@ -243,6 +275,8 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
         sub = f"shewing the political divisions, MDCCC{roman(1 + spec.seed % 9)}"
     elif mode == "ancient":
         sub = f"shewing the ancient divisions in the year MDCC{roman(1 + spec.seed % 9)}"
+    elif mode == "climate":
+        sub = f"shewing the annual rainfall, with the isotherms, MDCCC{roman(1 + spec.seed % 9)}"
     else:
         sub = f"surveyed in the year {roman(1800 + (spec.seed % 99))}"
 
@@ -419,7 +453,18 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
                           size=max(10, int(M * 0.14)))
 
     biome = view.biome
-    if biome is not None and biome_box:
+    rain_box = to_page(spots["rain"]) if "rain" in spots else None
+    if mode == "climate" and rain_box:
+        levels = render.RAIN_LEVELS
+        labels = []
+        for i, colour in enumerate(render.RAIN_BANDS):
+            lo = int(levels[i])
+            hi = int(levels[i + 1]) if i + 1 < len(levels) else None
+            labels.append((colour, f"{lo}-{hi}" if hi is not None else f"over {lo}"))
+        decor.draw_legend(draw, rain_box, labels, ink, paper_rgb,
+                          title="RAINFALL, MM", size=max(9, int(M * 0.100)))
+
+    if biome is not None and biome_box and mode != "climate":
         present = []
         for k, (bname, colour) in BIOMES.items():
             frac = float((biome == k).mean())

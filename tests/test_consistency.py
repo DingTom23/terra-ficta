@@ -339,3 +339,31 @@ def test_the_contents_page_holds_every_line():
         rows = np.where((a < 140).sum(axis=1) > 0)[0]
         assert rows.max() < book.PAGE[1] - 40, \
             f"{n} contents lines run to row {rows.max()} of {book.PAGE[1]}"
+
+
+def test_the_climate_plate_spans_several_rainfall_bands():
+    """A rainfall plate that shows one band is a coloured sheet, not a map."""
+    from atlas import render
+
+    world, _labels = _world_and_labels()
+    rain = world.climate["precipitation"][world.height > 0]
+    bands = np.digitize(rain, render.RAIN_LEVELS)
+    used = int(len(np.unique(bands)))
+    assert used >= 5, f"the country falls into only {used} rainfall bands"
+
+
+def test_the_climate_plate_is_a_third_kind_of_sheet():
+    """It must be banded, not tinted: the same ground, read another way."""
+    from atlas import render
+
+    world, _labels = _world_and_labels()
+    img, _h, _land = render.render_climate(world, scale=1)
+    assert img.shape[2] == 3
+    assert float(img.min()) >= -0.01 and float(img.max()) <= 1.5, \
+        "render_climate must return 0..1 floats like its siblings"
+
+    # The bands are flat fields, so the plate has large regions of one exact
+    # colour; a hypsometric ramp would have almost none.
+    q = (np.clip(img, 0, 1) * 255).astype(np.uint8)
+    flat_share = 1.0 - len(np.unique(q.reshape(-1, 3), axis=0)) / float(q.shape[0] * q.shape[1])
+    assert flat_share > 0.90, "the climate plate is not banded"
