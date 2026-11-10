@@ -85,20 +85,34 @@ def _route(towns, start, end, height, land, factor=3):
 
 
 def plan(world, feats, factor=3):
-    """Walk from the seat of government to the town furthest from anywhere."""
+    """Walk from the seat of government to the town furthest from anywhere.
+
+    If the farthest town cannot be reached -- it may stand on an island, with
+    no road and no land between -- the next farthest is tried, and so on down
+    the list.  A book with five itineraries and one gap reads as a printing
+    error, not as a country with an island in it.
+    """
     chief = feats.chief_town()
-    remote = feats.remotest_town()
-    if chief is None or remote is None or chief.name == remote.name:
+    if chief is None:
         return None
 
     towns = [(t.x, t.y) for t in feats.towns]
     start = next((i for i, t in enumerate(feats.towns) if t.name == chief.name), None)
-    end = next((i for i, t in enumerate(feats.towns) if t.name == remote.name), None)
-    if start is None or end is None:
+    if start is None:
         return None
 
-    path = _route(towns, start, end, world.height, world.land, factor)
-    if len(path) < 4:
+    order = sorted(range(len(feats.towns)),
+                   key=lambda i: -float(feats.towns[i].nearest_km or 0.0))
+    remote, path = None, []
+    for end in order:
+        if end == start:
+            continue
+        candidate = feats.towns[end]
+        route = _route(towns, start, end, world.height, world.land, factor)
+        if len(route) >= 4:
+            remote, path = candidate, route
+            break
+    if remote is None:
         return None
 
     hh, ww = world.height.shape
@@ -248,10 +262,16 @@ def text(journey: Journey, world, feats, name: str):
     crossed = sum(1 for s in journey.stations if s.kind == "river")
     named = sum(1 for s in journey.stations if s.kind == "river" and s.name)
     rivers = (f"{named} of them named" if named and named < crossed else "")
+    if crossed == 0:
+        water = "without crossing a watercourse"
+    elif crossed == 1:
+        water = f"having crossed one watercourse{(' (' + rivers + ')') if rivers else ''}"
+    else:
+        water = (f"having crossed {crossed} watercourses"
+                 f"{(' (' + rivers + ')') if rivers else ''}")
     close = (f"{journey.end} is reached on the {_ordinal(journey.days)} day, "
              f"{_count(journey.total_km)} kilometres from {journey.start}, "
-             f"having crossed {crossed} watercourse{'s' if crossed != 1 else ''}"
-             f"{' (' + rivers + ')' if rivers else ''}. The highest ground on the "
+             f"{water}. The highest ground on the "
              f"road is {_count(journey.high_m)} metres.")
 
     paras = [lead]
