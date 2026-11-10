@@ -280,7 +280,10 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
     elif mode == "ancient":
         sub = f"shewing the ancient divisions in the year MDCC{roman(1 + spec.seed % 9)}"
     elif mode == "climate":
-        sub = f"shewing the annual rainfall, with the isotherms, MDCCC{roman(1 + spec.seed % 9)}"
+        # The physical and political sheets are dated in the first decade of
+        # the century; a sheet of isotherms cannot be.  Humboldt drew the first
+        # isothermal world map in 1817, so this one is dated after him.
+        sub = f"shewing the annual rainfall, with the isotherms, MDCCCXXX{roman(1 + spec.seed % 9)}"
     else:
         sub = f"surveyed in the year {roman(1800 + (spec.seed % 99))}"
 
