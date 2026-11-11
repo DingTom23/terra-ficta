@@ -243,8 +243,9 @@ Still wrong, and known to be wrong:
 - The scale is now honest, and that is the newest thing in the book: a country
   spans sixteen degrees of latitude, about seventeen hundred kilometres, so a
   river is 800 km long, a market town holds 11,000 people and its neighbour
-  stands 110 km away. What is still missing is *density*: the plate names two
-  dozen towns and the countryside between them is empty of everything but
-  rivers.
+  stands 110 km away. Density is still the weak point: forty-two towns and
+  forty hamlets a country, drawn with three symbols and a leader line where a
+  name had to move, where a real sheet at this scale would carry several
+  hundred named places and a graduated vocabulary of what each one is.
 - Nothing in the book is written by a person, including the colophon, which is
   the one place a person ought to be speaking.

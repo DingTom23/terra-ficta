@@ -225,7 +225,7 @@ class Entry:
     text: str
 
 
-_RANK_WORD = {0: "city", 1: "market town", 2: "village"}
+_RANK_WORD = {0: "city", 1: "market town", 2: "village", 3: "hamlet"}
 
 
 def _m(value, step=0):

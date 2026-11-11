@@ -364,7 +364,7 @@ def measure(world, labels) -> Features:
         # old figures -- a market town of five hundred souls, five hundred
         # kilometres from its neighbour -- described a wilderness that the
         # plate was not drawing.
-        base = {0: 45000, 1: 11000, 2: 1200}.get(t.rank, 1200)
+        base = {0: 45000, 1: 11000, 2: 1200, 3: 180}.get(t.rank, 1200)
         rng = np.random.default_rng(_seed_of(t.name))
         pop = base * (0.55 + 1.20 * rng.random())
         if getattr(t, "capital", False):

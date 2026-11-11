@@ -388,30 +388,51 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
 
     halo = max(1, int(s * 0.8))
 
+    # Every settlement gets its mark, whether or not its name survived the
+    # placement.  A dot is a place, and a place does not stop existing because
+    # there was no room to write beside it -- which also means a sheet crowded
+    # enough to lose a name still shows the village.
+    sett = [lb for lb in labels if lb.kind == "town"]
+    for lb in sett:
+        x = M + lb.x * s
+        y = M + lb.y * s
+        face, frac, _ = STYLES["town"]
+        boost = {0: 1.14, 1: 1.00, 2: 0.92, 3: 0.78}.get(lb.rank, 1.0)
+        f = decor.font("serif-bold" if lb.capital else "serif",
+                       max(9, int(frac * RW * boost)))
+        if lb.capital:
+            _star(draw, x, y, max(4.0, f.size * 0.40), ink)
+        elif lb.rank == 1:
+            r = max(3.0, f.size * 0.21)
+            draw.ellipse([x - r, y - r, x + r, y + r], outline=ink,
+                         width=max(1, int(round(f.size * 0.07))))
+            draw.ellipse([x - r * 0.34, y - r * 0.34,
+                          x + r * 0.34, y + r * 0.34], fill=ink)
+        elif lb.rank == 3:
+            r = max(1.5, f.size * 0.11)
+            draw.ellipse([x - r, y - r, x + r, y + r], fill=ink)
+        else:
+            r = max(2, int(f.size * 0.14))
+            draw.ellipse([x - r, y - r, x + r, y + r], fill=ink)
+
     for lb in placed:
         x = M + lb.x * s
         y = M + lb.y * s
         face, frac, _ = STYLES[lb.kind]
         f = decor.font(face, max(10, int(frac * RW)))
         if lb.kind == "town":
-            boost = {0: 1.14, 1: 1.00, 2: 0.92}.get(lb.rank, 1.0)
+            boost = {0: 1.14, 1: 1.00, 2: 0.92, 3: 0.78}.get(lb.rank, 1.0)
             f = decor.font("serif-bold" if lb.capital else "serif",
-                           max(10, int(frac * RW * boost)))
-            if lb.capital:
-                _star(draw, x, y, max(4.0, f.size * 0.40), ink)
-                r = f.size * 0.40
-            elif lb.rank == 1:
-                r = max(3.0, f.size * 0.21)
-                draw.ellipse([x - r, y - r, x + r, y + r], outline=ink,
-                             width=max(1, int(round(f.size * 0.07))))
-                draw.ellipse([x - r * 0.34, y - r * 0.34,
-                              x + r * 0.34, y + r * 0.34], fill=ink)
-            else:
-                r = max(2, int(f.size * 0.15))
-                draw.ellipse([x - r, y - r, x + r, y + r], fill=ink)
+                           max(9, int(frac * RW * boost)))
+            r = max(4.0, f.size * 0.40) if lb.capital else (
+                max(3.0, f.size * 0.21) if lb.rank == 1
+                else max(2, int(f.size * 0.14)))
             gap = max(r * 2.4, f.size * 0.52)
-            tx = x - gap - lb.w * s if lb.flip else x + gap
-            decor.tracked_text(draw, (tx, y), lb.text, f, ink,
+            px, py = x + lb.ox * s, y + lb.oy * s
+            if lb.ox or lb.oy:
+                draw.line([(x, y), (px, py)], fill=ink_soft, width=1)
+            tx = px - gap - lb.w * s if lb.flip else px + gap
+            decor.tracked_text(draw, (tx, py), lb.text, f, ink,
                                anchor_center=False, stroke_width=halo,
                                stroke_fill=paper_rgb)
         elif lb.kind == "river" and abs(lb.angle) > 8:

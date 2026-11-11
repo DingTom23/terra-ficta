@@ -40,17 +40,23 @@ class Label:
     capital: bool = False
     rank: int = 2
     flip: bool = False
+    # Where the name sits relative to the dot it belongs to, in cells.  A name
+    # that has been pushed aside to fit still points at its town; the line
+    # drawn from the dot to the name is the whole reason it is allowed to move.
+    ox: float = 0.0
+    oy: float = 0.0
 
     def box(self):
         # A town's name is set beside its dot, not centred on it.
         # Collision-testing it as a centred box let names run under the legends.
         if self.dot:
             gap = self.h * 1.1
+            px, py = self.x + self.ox, self.y + self.oy
             if self.flip:
-                return (self.x - self.w - gap, self.y - self.h / 2,
-                        self.x, self.y + self.h / 2)
-            return (self.x, self.y - self.h / 2,
-                    self.x + self.w + gap, self.y + self.h / 2)
+                return (px - self.w - gap, py - self.h / 2,
+                        px, py + self.h / 2)
+            return (px, py - self.h / 2,
+                    px + self.w + gap, py + self.h / 2)
         return (self.x - self.w / 2, self.y - self.h / 2,
                 self.x + self.w / 2, self.y + self.h / 2)
 
@@ -117,7 +123,7 @@ def _river_angle(rec, x, y, ww, steps=12):
 
 
 def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
-                 n_towns=24, n_rivers=3, width=None, height=None, avoid=(),
+                 n_towns=42, n_rivers=5, n_hamlets=40, width=None, height=None, avoid=(),
                  name_prov=None):
     """Return a priority-ordered list of labels in map-cell coordinates."""
     h = world.height
@@ -317,6 +323,31 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
             culture=ci,
         ))
 
+    # Hamlets.  A country of this size has far more places than a sheet can
+    # name, so the smallest are drawn as a dot and named only where a name
+    # fits.  They are still places: they keep their entry in the dictionary and
+    # their line in the index whatever the engraver had room for.
+    picked_h = []
+    for idx in order[:9000]:
+        y, x = divmod(int(idx), ww)
+        if not land[y, x]:
+            continue
+        if any((x - px) ** 2 + (y - py) ** 2 < (ww * 0.030) ** 2
+               for px, py in picked + picked_h):
+            continue
+        picked_h.append((x, y))
+        if len(picked_h) >= n_hamlets:
+            break
+    for i, (x, y) in enumerate(picked_h):
+        ci = _culture_index(naming, cultures, x, y, fallback=n + i)
+        labels.append(Label(
+            text=unique(lambda k: namer.derive(("hamlet", round(x), round(y), k))
+                               .place(cultures[ci], "town", suffix=True)),
+            x=float(x), y=float(y), kind="town", size=15, priority=6, dot=True,
+            rank=3, prov=int(prov[int(y), int(x)]) if prov is not None else -1,
+            culture=ci,
+        ))
+
     # --- rivers ---------------------------------------------------------
     rec = world.drainage["receivers"].reshape(hh, ww)
     thr = max(200.0, np.percentile(acc[land], 99.5)) if land.any() else 1e9
@@ -381,12 +412,22 @@ def avoid(labels, ww, hh, obstacles=()):
         # A town name that will not fit on the right of its dot is set on the
         # left instead -- the way an engraver would have done it, and the only
         # way to keep towns near the frame from disappearing altogether.
+        # A town name is allowed to move off its dot, and the plate draws a
+        # hairline back to the town.  Without this a crowd of names along a
+        # coast simply vanishes: the tighter the settlement, the fewer towns
+        # the sheet shows, which is the opposite of what density should do.
         if lb.kind == "town":
-            flipped = replace(lb, flip=not lb.flip)
-            if fits(flipped.box()):
-                boxes.append(flipped.box())
-                placed.append(flipped)
-                continue
+            cands = [replace(lb, flip=not lb.flip)]
+            for dx, dy in ((0.0, -0.95), (0.0, 0.95), (-0.70, -0.95),
+                           (0.70, 0.95), (-0.70, 0.0), (0.70, 0.0),
+                           (0.0, -1.80), (0.0, 1.80)):
+                cands.append(replace(lb, ox=dx * lb.w, oy=dy * lb.h))
+            for cand in cands:
+                if fits(cand.box()):
+                    boxes.append(cand.box())
+                    placed.append(cand)
+                    break
+            continue
         if lb.kind != "region":
             continue
         cx = min(max(lb.x, mx + lb.w / 2), ww - mx - lb.w / 2)

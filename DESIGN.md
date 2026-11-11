@@ -808,3 +808,31 @@ much of the sheet it covers, and that is why the tuning could be done by eye on 
 rather than by re-fitting a constant.  And the mountain belts used to be scattered around the
 mean of the nuclei, which sometimes put a range in open water; they are now the longest arms
 of the spine itself, stretched, which is where an orogen belongs.
+
+## 33. A dot is a place
+
+The settlement marker used to be drawn inside the same loop as the settlement's name, so a
+town whose name failed placement lost its dot as well.  The country simply did not show the
+place.  That is the same mistake as building the roads from the labels that survived: the
+sheet was deciding the geography.  Markers are now drawn from the full label list and names
+from the placed subset, so a crowded coast loses the writing and keeps the places.
+
+Three things follow.
+
+A name may move.  `avoid()` used to try exactly two positions for a town name -- right of the
+dot, then left of it -- and drop the label otherwise.  It now tries eight offsets as well, up
+to 1.8 label heights away, and when one is accepted the plate draws a hairline from the dot to
+the name.  This is what an engraver does when the coast is crowded, and it is why the label box
+has to be separated from the point it names: `Label.ox, Label.oy` carry the offset, `box()`
+applies it, and the dot stays at `x, y` where it belongs.
+
+Small places exist.  A country of a million square kilometres has far more settlements than a
+sheet at this scale can name, so the smallest are drawn as a dot with a name only where one
+fits: forty-two towns and forty hamlets a country, of which roughly a third of the hamlet
+names actually reach the paper.  They keep their dictionary entry and their index line either
+way, which is the honest arrangement: the book describes the country, the sheet shows what fits.
+
+The width of a branch must fall.  An attempt to make the spine rougher by jittering each
+segment's width between 0.72 and 1.06 of its parent merged the arms into one smooth lens --
+six seeds, six ellipses, exactly the shape the spine was introduced to remove.  A branch that
+is as wide as the thing it branches from is not a branch.
