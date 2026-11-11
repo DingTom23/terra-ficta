@@ -18,6 +18,8 @@ elevation in metres.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from .noise import fbm, ridged, smoothstep, warp
@@ -95,21 +97,78 @@ def _blob_distance(x, y, blobs):
     return d
 
 
-def _ridge_axes(rng, spec: WorldSpec, blobs):
+def _spine(rng, spec: WorldSpec):
+    """The continent's skeleton: a branching spine of tapering segments.
+
+    A landmass is not a heap of discs.  Its plan is a core with belts running
+    out of it -- long capes, deep bays between the arms, and a width that falls
+    towards the ends.  Drawing the shape from a skeleton gives all three for
+    free.  A union of ellipses gives none of them, and the joints between the
+    ellipses show through as round lobes and hard notches: a heap of balls.
+    """
     aspect = spec.aspect
-    n = max(1, spec.blobs)
-    cx = float(np.mean([b[0] for b in blobs[:n]]))
-    cy = float(np.mean([b[1] for b in blobs[:n]]))
+    cx = aspect * (0.5 + rng.uniform(-0.05, 0.05))
+    cy = 0.5 + rng.uniform(-0.05, 0.05)
+    arms = max(3, int(round(spec.blobs * 0.75)))
+    segs = []                                    # (x0, y0, x1, y1, w0, w1)
+    core = 0.085 + 0.030 * rng.random()
+    reach = 0.42 + 0.16 * rng.random()
+
+    def grow(x, y, ang, length, w, depth):
+        for _ in range(4 if depth == 0 else 2):
+            ang += rng.normal(0.0, 0.30)
+            ln = max(0.040, length * rng.uniform(0.70, 1.02))
+            nx = x + math.cos(ang) * ln
+            ny = y + math.sin(ang) * ln
+            w2 = max(0.030, w * 0.88)
+            segs.append((x, y, nx, ny, w, w2))
+            if depth < 2 and rng.random() < 0.60:
+                grow(nx, ny,
+                     ang + float(rng.choice((-1.0, 1.0))) * rng.uniform(0.45, 1.05),
+                     ln * 0.75, w2 * 0.78, depth + 1)
+            x, y, w = nx, ny, w2
+
+    # Arms are not spread evenly round a circle: a continent has a grain, and
+    # its belts run along it.  Without this the landmass is a starfish.
+    grain = rng.uniform(0.0, 2.0 * math.pi)
+    for k in range(arms):
+        ang = grain + rng.normal(0.0, 0.62)
+        grow(cx, cy, ang, reach * rng.uniform(0.8, 1.25),
+             core * rng.uniform(0.78, 1.10), 0)
+    return segs
+
+
+def _spine_distance(x, y, segs):
+    """Distance to the spine measured in half-widths: 1.0 on the shore, less
+    inland.  Same convention as the elliptical field it replaces."""
+    d = np.full_like(x, 1e9)
+    for (x0, y0, x1, y1, w0, w1) in segs:
+        vx, vy = x1 - x0, y1 - y0
+        l2 = max(vx * vx + vy * vy, 1e-12)
+        t = np.clip(((x - x0) * vx + (y - y0) * vy) / l2, 0.0, 1.0)
+        w = w0 + (w1 - w0) * t
+        np.minimum(d, np.hypot(x - (x0 + t * vx), y - (y0 + t * vy)) / w, out=d)
+    return d
+
+
+def _ridge_axes(rng, spec: WorldSpec, segs):
+    """Mountain belts run along the spine, because an orogen follows the grain.
+
+    The old version scattered belts around the mean of the nuclei, so a range
+    could lie across open water.  Here the belts are the longest arms of the
+    landmass itself, stretched a little, which is where a real belt sits.
+    """
+    order = sorted(range(len(segs)),
+                   key=lambda i: -(abs(segs[i][2] - segs[i][0])
+                                   + abs(segs[i][3] - segs[i][1])))
     axes = []
-    base = rng.uniform(0, np.pi)
-    for i in range(spec.ridge_count):
-        ang = base + i * np.pi / max(1, spec.ridge_count) + rng.uniform(-0.45, 0.45)
-        length = rng.uniform(0.55, 1.0) * aspect
-        ox = cx + rng.uniform(-0.10, 0.10) * aspect
-        oy = cy + rng.uniform(-0.12, 0.12)
-        dx, dy = np.cos(ang) * length * 0.5, np.sin(ang) * length * 0.5
-        axes.append((ox - dx, oy - dy, ox + dx, oy + dy,
-                     spec.ridge_width * rng.uniform(0.65, 1.35)))
+    for i in range(max(1, spec.ridge_count)):
+        x0, y0, x1, y1, _w0, _w1 = segs[order[i % len(order)]]
+        vx, vy = x1 - x0, y1 - y0
+        stretch = rng.uniform(0.8, 1.5)
+        axes.append((x0 - vx * stretch, y0 - vy * stretch,
+                     x1 + vx * stretch, y1 + vy * stretch,
+                     spec.ridge_width * rng.uniform(0.75, 1.35)))
     return axes
 
 
@@ -126,7 +185,8 @@ def build_base(spec: WorldSpec):
     rng = np.random.default_rng(spec.seed)
     x, y = _grid(spec)
     blobs = _blobs(rng, spec)
-    body = 1.0 - _blob_distance(x, y, blobs)
+    segs = _spine(rng, spec)
+    body = 1.0 - _spine_distance(x, y, segs)
 
     # --- continental potential: shape only ------------------------------
     warper = warp(spec.seed + 11, amp=1.0, octaves=4)
@@ -174,7 +234,7 @@ def build_base(spec: WorldSpec):
     hills = (0.038 * fbm(spec.seed + 61, octaves=5)(x, y, freq=6.0, gain=0.52)
              + 0.018 * fbm(spec.seed + 67, octaves=4)(x, y, freq=15.0, gain=0.45))
 
-    axes = _ridge_axes(rng, spec, blobs)
+    axes = _ridge_axes(rng, spec, segs)
     belt = np.zeros_like(x)
     for seg in axes:
         belt = np.maximum(belt, np.exp(-(_segment_distance(x, y, seg) / max(seg[4], 1e-6)) ** 2))

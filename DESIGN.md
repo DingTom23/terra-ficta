@@ -777,3 +777,34 @@ Every clause in the journal is backed by a station recorded on the way, so the t
 sheet cannot disagree: the distances are summed along the road, the heights are read off
 the terrain at each station, the provinces are the partition that is drawn, and the count
 of watercourses is the count of crossings.
+
+## 32. A continent is a spine, not a heap of discs
+
+The landmass was the union of N rotated ellipses: one distance field per nucleus, take the
+minimum, threshold at a sea level chosen so the land fraction comes out right.  It was cheap
+and it was deterministic, and it produced exactly what it says on the tin.  Every ellipse is
+convex, and the union of convex shapes has to show its joints: where two of them meet, the
+outline turns a corner inwards.  On the sheet those joints read as round lobes with deep
+notches between them -- a heap of balls, which is precisely what a reader said before adding
+"haha".
+
+No amount of noise fixes this.  The coast noise acts inside a band of width 0.22 around the
+level set, so it can wobble the outline but cannot change the topology that made it.  Giving
+each nucleus its own lobed profile fixed the islands and could not fix the mainland, because
+the mainland's problem was never that its outline was too smooth: it was that its outline
+was a union.
+
+The fix is a different generator, not a better filter.  A continent is a core with belts
+running out of it: long capes, bays between the arms, a width falling towards the ends, and a
+grain -- the belts run along a common axis, because a continent is a weld of terranes and the
+weld has a direction.  So the shape is now drawn from a branching skeleton of tapering
+segments, and the land is the set of points within a varying distance of it.  Measured on the
+largest component of six seeds: bounding-box aspect 1.07-1.70 and fill 0.54-0.69, against
+about 0.78 for anything round.  Nothing is round any more.
+
+Two consequences worth remembering.  The sea level is still a quantile of the potential, so
+the land fraction is unchanged by any of this -- reshaping a continent does not change how
+much of the sheet it covers, and that is why the tuning could be done by eye on an ASCII dump
+rather than by re-fitting a constant.  And the mountain belts used to be scattered around the
+mean of the nuclei, which sometimes put a range in open water; they are now the longest arms
+of the spine itself, stretched, which is where an orogen belongs.
