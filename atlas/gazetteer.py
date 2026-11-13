@@ -357,24 +357,41 @@ def entries(world, labels, feats=None):
 
 
 def _run_in(draw, head, text, fh, fb, col_w, indent):
-    """Head and text on one line, the rest hanging under an indent."""
-    hw = draw.textlength(head, font=fh) + draw.textlength(" \u2014 ", font=fb)
+    """Head and text on one line, the rest hanging under an indent.
+
+    Nothing this returns can be wider than the column: a word too long for the
+    line is broken rather than allowed to run into the next column.  A
+    dictionary whose columns touch is not a dictionary.
+    """
+    hwid = draw.textlength(head, font=fh)
+    dash = draw.textlength(" \u2014 ", font=fb)
+    hw = hwid + dash
     avail = col_w - hw
-    lines, cur, first = [], "", True
+    lines, cur = [], ""
     if avail < col_w * 0.25:          # the head alone is most of the column
         lines.append("")
-        first = False
+        hw = None                     # no room for the dash: head on its own
         avail = col_w - indent
     for word in text.split():
         trial = f"{cur} {word}".strip()
         if draw.textlength(trial, font=fb) <= avail:
             cur = trial
-        else:
-            if cur:
-                lines.append(cur)
+            continue
+        if cur:
+            lines.append(cur)
+        cur = ""
+        avail = col_w - indent
+        if draw.textlength(word, font=fb) <= avail:
             cur = word
-            avail = col_w - indent
-            first = False
+            continue
+        piece = ""
+        for ch in word:               # a word longer than the column
+            if draw.textlength(piece + ch, font=fb) <= avail:
+                piece += ch
+            else:
+                lines.append(piece)
+                piece = ch
+        cur = piece
     if cur:
         lines.append(cur)
     return lines, hw
@@ -389,7 +406,9 @@ def entry_pages(size, head, entries_list, per_page=None):
 
     margin = int(w * 0.105)
     gutter = int(w * 0.045)
-    col_w = (w - 2 * margin - gutter) // 2
+    # Three pixels of air between the longest line and the gutter: a column of
+    # type that touches its neighbour reads as a smudge, not as two columns.
+    col_w = (w - 2 * margin - gutter) // 2 - 3
     top = int(h * 0.135)
     bottom = int(h * 0.895)
 
@@ -414,15 +433,18 @@ def entry_pages(size, head, entries_list, per_page=None):
 
     def draw_block(draw, x, y, e, lines, hw):
         draw.text((x, y), e.head.upper(), font=fh, fill=ink)
-        hwid = draw.textlength(e.head.upper(), font=fh)
-        draw.text((x + hwid, y), " \u2014 ", font=fb, fill=ink)
-        if lines and lines[0]:
-            draw.text((x + hw, y), lines[0], font=fb, fill=ink)
-            rest = lines[1:]
+        if hw is None:                # the head fills the column on its own
+            hwid = draw.textlength(e.head.upper(), font=fh)
+            if hwid + draw.textlength(" \u2014 ", font=fb) <= col_w and lines and lines[0]:
+                draw.text((x + hwid, y), " \u2014 ", font=fb, fill=ink)
         else:
-            rest = lines
+            hwid = draw.textlength(e.head.upper(), font=fh)
+            draw.text((x + hwid, y), " \u2014 ", font=fb, fill=ink)
+            if lines and lines[0]:
+                draw.text((x + hw, y), lines[0], font=fb, fill=ink)
+                lines = lines[1:]
         yy = y + lead
-        for line in rest:
+        for line in lines:
             draw.text((x + indent, yy), line, font=fb, fill=ink)
             yy += lead
 

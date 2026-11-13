@@ -333,13 +333,16 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
                 f = decor.font(STYLES["region"][0], max(10, int(STYLES["region"][1] * RW)))
                 lb.w, lb.h = (v / s for v in _measure(draw, lb.text, f, lb.tracking))
 
-    placed = avoid(labels, ww, hh, obstacles)
-
     # --- seats of government --------------------------------------------
     # A political plate that marks every town alike says nothing about where
     # the country is governed.  One town per province is promoted to its seat:
     # the one nearest the province's own name, which is already sited near the
     # middle of the province.
+    #
+    # This happens BEFORE the names are placed, because a seat is set in bold
+    # and a bold name is wider than the regular one it was measured as.  A
+    # promotion after placement silently widened a box that had already been
+    # promised to a neighbour.
     prov_grid = getattr(view, "provinces", None)
     if prov_grid is not None:
         seats = {}
@@ -361,8 +364,12 @@ def compose(world, namer: Namer, scale=None, margin_frac=0.10, title=None, subti
                     best, best_key = t, key
             if best is not None:
                 seats[lb.prov] = best
+        bold = decor.font("serif-bold", max(10, int(STYLES["town"][1] * RW)))
         for t in seats.values():
             t.capital = True
+            t.w, t.h = (v / s for v in _measure(draw, t.text, bold, t.tracking))
+
+    placed = avoid(labels, ww, hh, obstacles)
 
     # --- roads -----------------------------------------------------------
     # From every town in the country, not from the ones whose names fitted.

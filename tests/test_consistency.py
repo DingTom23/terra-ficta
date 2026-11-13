@@ -472,3 +472,26 @@ def test_the_journey_does_not_walk_on_water():
     assert trip is not None
     assert all(st.elev >= 0.0 for st in trip.stations), \
         "the road crosses water at some station"
+
+
+def test_no_two_names_on_a_plate_collide():
+    """Every name that is drawn must have the room it says it has.
+
+    A label carries the box it will occupy, and a rotated name occupies the
+    box its rotated self needs.  If two boxes intersect, two names are printed
+    on top of each other -- the one defect a reader sees instantly and cannot
+    unsee.
+    """
+    from atlas.compose import compose
+    from atlas.naming import Namer
+
+    world = build_world(WorldSpec(seed=3, width=900, height=620,
+                                  lat_top=58.0, lat_bottom=42.0))
+    _page, placed, _view = compose(world, Namer(3), title="Testland", target_px=1100)
+    boxes = [(lb.kind, lb.text, lb.box()) for lb in placed if lb.drawn]
+    for i in range(len(boxes)):
+        ka, ta, a = boxes[i]
+        for j in range(i + 1, len(boxes)):
+            kb, tb, b = boxes[j]
+            hit = not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
+            assert not hit, f"{ka} {ta!r} overlaps {kb} {tb!r}"

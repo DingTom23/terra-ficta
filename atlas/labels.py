@@ -45,20 +45,32 @@ class Label:
     # drawn from the dot to the name is the whole reason it is allowed to move.
     ox: float = 0.0
     oy: float = 0.0
+    # Whether this name actually reached the sheet.  The caller gets every
+    # place in the country so the geography is complete; only these are inked.
+    drawn: bool = False
 
     def box(self):
+        # A rotated name occupies the box its rotated self needs, not the box
+        # its upright self would: a river name set at forty degrees is twice as
+        # tall as its line height, and testing it as though it were upright let
+        # it run straight through the town name above it.
+        w, h = self.w, self.h
+        if self.angle:
+            a = math.radians(self.angle)
+            c, s = abs(math.cos(a)), abs(math.sin(a))
+            w, h = self.w * c + self.h * s, self.w * s + self.h * c
         # A town's name is set beside its dot, not centred on it.
         # Collision-testing it as a centred box let names run under the legends.
         if self.dot:
-            gap = self.h * 1.1
+            gap = h * 1.1
             px, py = self.x + self.ox, self.y + self.oy
             if self.flip:
-                return (px - self.w - gap, py - self.h / 2,
-                        px, py + self.h / 2)
-            return (px, py - self.h / 2,
-                    px + self.w + gap, py + self.h / 2)
-        return (self.x - self.w / 2, self.y - self.h / 2,
-                self.x + self.w / 2, self.y + self.h / 2)
+                return (px - w - gap, py - h / 2,
+                        px, py + h / 2)
+            return (px, py - h / 2,
+                    px + w + gap, py + h / 2)
+        return (self.x - w / 2, self.y - h / 2,
+                self.x + w / 2, self.y + h / 2)
 
 
 def _kmeans(points, k, rng, iters=14):
@@ -407,6 +419,7 @@ def avoid(labels, ww, hh, obstacles=()):
     for lb in labels:
         if fits(lb.box()):
             boxes.append(lb.box())
+            lb.drawn = True
             placed.append(lb)
             continue
         # A town name that will not fit on the right of its dot is set on the
@@ -425,7 +438,12 @@ def avoid(labels, ww, hh, obstacles=()):
             for cand in cands:
                 if fits(cand.box()):
                     boxes.append(cand.box())
-                    placed.append(cand)
+                    # Carry the chosen placement back onto the label itself, so
+                    # everything that reads this country later -- the dictionary,
+                    # the roads, the index -- sees where the name really went.
+                    lb.flip, lb.ox, lb.oy = cand.flip, cand.ox, cand.oy
+                    lb.drawn = True
+                    placed.append(lb)
                     break
             continue
         if lb.kind != "region":
@@ -441,7 +459,9 @@ def avoid(labels, ww, hh, obstacles=()):
             cb = cand.box()
             if fits(cb):
                 boxes.append(cb)
-                placed.append(cand)
+                lb.x, lb.y = cand.x, cand.y
+                lb.drawn = True
+                placed.append(lb)
                 break
     return placed
 
