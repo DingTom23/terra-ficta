@@ -127,37 +127,62 @@ def contents_page(size, entries):
     x0, x1 = w * 0.20, w * 0.80
     top, bottom = h * 0.22, h * 0.92
 
-    # A contents page must hold every line it is given.  Rather than assume a
-    # row height and hope, shrink the setting until the last row clears the
-    # foot -- a table that runs off the page is worse than small type.
     rows = max(1, len(entries))
     avail = bottom - top
     floor = int(w * 0.0075)
+    base_size = int(w * 0.015)
+    gap = w * 0.035
 
-    # A contents page must hold every line it is given.  Tighten the leading
-    # before shrinking the type, shrink the type only to a floor, and if even
-    # that will not do, set the table in two columns -- a line that runs off
-    # the foot of the page is worse than small type, and six-point type is
-    # worse than a second column.
-    cols, size = 1, int(w * 0.015)
-    while True:
-        per = (rows + cols - 1) // cols
-        s = int(w * 0.015)
-        while s > floor and per * int(s * 1.45) > avail:
-            s -= 1
-        if per * int(s * 1.45) <= avail or cols >= 2:
-            size = s
+    def fits(candidate_cols, candidate_size):
+        """Whether every entry fits both vertically and beside its folio."""
+        per = (rows + candidate_cols - 1) // candidate_cols
+        if per * int(candidate_size * 1.45) > avail:
+            return False
+        f = decor.font("serif", candidate_size)
+        fy = decor.font("antiqua", candidate_size)
+        fnum = decor.font("antiqua", int(candidate_size * 0.93))
+        span = (x1 - x0 - (candidate_cols - 1) * gap) / candidate_cols
+        for c in range(candidate_cols):
+            cx0 = x0 + c * (span + gap)
+            cx1 = cx0 + span
+            chunk = entries[c * per:(c + 1) * per]
+            col = max((draw.textlength(num, font=fnum)
+                       for num, _, _ in chunk), default=0)
+            tx = cx0 + col + candidate_size * 0.9
+            for _num, name, folio in chunk:
+                page_width = draw.textlength(str(folio), font=fy)
+                name_right = cx1 - page_width - candidate_size * 0.75
+                if draw.textlength(name, font=f) > name_right - tx:
+                    return False
+        return True
+
+    # Choose the largest type that satisfies both constraints.  The old layout
+    # only checked the row count, so a long entry could run through its folio
+    # and into the next column even though the last row fitted vertically.
+    cols, size = 2, floor
+    for candidate_cols in (1, 2):
+        candidate_size = base_size
+        while candidate_size >= floor and not fits(candidate_cols, candidate_size):
+            candidate_size -= 1
+        if candidate_size >= floor:
+            cols, size = candidate_cols, candidate_size
             break
-        cols = 2
 
     f = decor.font("serif", size)
     fy = decor.font("antiqua", size)
     fnum = decor.font("antiqua", int(size * 0.93))
     per = (rows + cols - 1) // cols
     lead = min(int(size * 2.0), max(int(size * 1.35), avail // per))
-
-    gap = w * 0.035
     span = (x1 - x0 - (cols - 1) * gap) / cols
+
+    def fit_name(name, font, width):
+        """Keep a pathological title inside the folio gutter as a last resort."""
+        if draw.textlength(name, font=font) <= width:
+            return name
+        ellipsis = "…"
+        while name and draw.textlength(name + ellipsis, font=font) > width:
+            name = name[:-1]
+        return name + ellipsis if name else ellipsis
 
     for c in range(cols):
         cx0 = x0 + c * (span + gap)
@@ -171,10 +196,14 @@ def contents_page(size, entries):
         y = top
         for num, name, folio in chunk:
             draw.text((cx0, y), num, font=fnum, fill=soft)
+            page_width = draw.textlength(str(folio), font=fy)
+            page_x0 = cx1 - page_width
+            name_right = page_x0 - f.size * 0.75
+            name = fit_name(name, f, max(1.0, name_right - tx))
             draw.text((tx, y), name, font=f, fill=ink)
             tw = draw.textlength(name, font=f)
             dots_from = tx + tw + f.size * 0.4
-            dots_to = cx1 - f.size * 1.4
+            dots_to = page_x0 - f.size * 0.35
             if dots_to > dots_from:
                 step = f.size * 0.42
                 x = dots_from
