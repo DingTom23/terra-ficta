@@ -300,3 +300,13 @@ def page(size, world, feats, name, seed=0):
         _draw_band(draw, box, prof, line, world, feats, font_small, font_tiny)
 
     return page_img
+
+
+def stamp_folio(page_img, folio):
+    """Print the book's page number in the foot of a page image."""
+    draw = ImageDraw.Draw(page_img)
+    w, h = page_img.size
+    f = decor.font("antiqua", max(10, int(w * 0.0105)))
+    draw.text((w / 2, int(h * 0.945)), str(folio), font=f,
+              fill=_rgb(INK_SOFT), anchor="mm")
+    return page_img

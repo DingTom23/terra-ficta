@@ -275,16 +275,18 @@ def _assemble_book(sheets, seeds):
         folio += 1
         contents.append(("", sheet["title"] + " — a survey", folio))
         body.append(gazetteer.text_page(sheet["title"], sheet["subtitle"], sheet["paras"],
-                                        size=size,
+                                        size=size, folio=folio,
                                         seed=sum(ord(c) for c in sheet["title"]) % 1000))
 
         ents = sheet.get("entries") or []
         if ents:
-            pages, page_of = gazetteer.entry_pages(size, sheet["title"], ents)
+            pages, page_of = gazetteer.entry_pages(size, sheet["title"], ents,
+                                                   start_folio=folio + 1)
             first = folio + 1
             contents.append(("", sheet["title"] + " — gazetteer", first))
             for name, idx in page_of.items():
-                index.setdefault(name, str(first + idx))
+                # One key per name, whatever case the label was drawn in.
+                index.setdefault(name.title(), str(first + idx))
             body.extend(pages)
             folio += len(pages)
 
@@ -292,14 +294,14 @@ def _assemble_book(sheets, seeds):
         if jr is not None:
             folio += 1
             contents.append(("", sheet["title"] + " \u2014 a journey across it", folio))
-            body.append(gazetteer.text_page(jr[0], jr[1], jr[2], size=size,
+            body.append(gazetteer.text_page(jr[0], jr[1], jr[2], size=size, folio=folio,
                                             seed=sum(ord(c) for c in jr[0]) % 1000))
 
         sec_page = sheet.get("sections")
         if sec_page is not None:
             folio += 1
             contents.append(("", sheet["title"] + " \u2014 sections across it", folio))
-            body.append(sec_page)
+            body.append(section.stamp_folio(sec_page.copy(), folio))
 
         num = (sheet["plate"] or "").replace("PLATE ", "") or "I"
         for lb in sheet["labels"]:
@@ -312,7 +314,7 @@ def _assemble_book(sheets, seeds):
     pages.extend(body)
 
     entries = sorted(index.items(), key=lambda kv: kv[0].lower())
-    pages.extend(book.index_pages(size, entries))
+    pages.extend(book.index_pages(size, entries, start_folio=len(pages) + 1))
     return pages
 
 

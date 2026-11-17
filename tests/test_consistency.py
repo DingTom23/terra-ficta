@@ -551,3 +551,17 @@ def test_the_section_page_keeps_its_ink_on_the_page():
     assert len(xs) > 1000, "the section page is blank"
     assert xs.min() >= 30 and xs.max() <= 1170, "ink outside the page"
     assert ys.min() >= 10 and ys.max() <= 840, "ink outside the page"
+
+
+def test_the_dictionary_prints_the_book_folio_it_is_given():
+    """An index that says 'see 37' must find a page that says 37."""
+    from atlas import gazetteer
+
+    ents = [gazetteer.Entry("Aaa", "town",
+                            "a village in X, 10 m above the sea; population 100.")]
+    pa, _ = gazetteer.entry_pages((1200, 850), "Testland", ents, start_folio=41)
+    pb, _ = gazetteer.entry_pages((1200, 850), "Testland", ents, start_folio=42)
+    a = np.asarray(pa[0].convert("L")).astype(np.int16)
+    b = np.asarray(pb[0].convert("L")).astype(np.int16)
+    strip = slice(int(850 * 0.92), int(850 * 0.97))
+    assert int(np.abs(a[strip] - b[strip]).sum()) > 0, "the folio is fixed, not passed in"

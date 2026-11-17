@@ -134,7 +134,7 @@ def _unique(items):
     return out
 
 
-def text_page(title, subtitle, paragraphs, size=(1600, 2000), seed=0):
+def text_page(title, subtitle, paragraphs, size=(1600, 2000), seed=0, folio=None):
     """Set a gazetteer page: title, rule, and prose sized to fit the sheet.
 
     The body is set by measurement, not by hope.  A page whose last paragraph
@@ -196,6 +196,10 @@ def text_page(title, subtitle, paragraphs, size=(1600, 2000), seed=0):
     # reads as a printing error rather than a full stop.
     y = min(y + gap * 0.2, h - margin * 0.30)
     draw.text((w / 2, y), "— finis —", font=fs, fill=soft, anchor="mm")
+    if folio is not None:
+        fnum = decor.font("antiqua", max(10, int(w * 0.0105)))
+        draw.text((w / 2, int(h * 0.945)), str(folio), font=fnum,
+                  fill=soft, anchor="mm")
     return page
 
 
@@ -416,7 +420,7 @@ def _run_in(draw, head, text, fh, fb, col_w, indent):
     return lines, hw
 
 
-def entry_pages(size, head, entries_list, per_page=None):
+def entry_pages(size, head, entries_list, per_page=None, start_folio=1):
     """Set the dictionary in two columns; return (pages, page_of_entry)."""
     w, h = size
     paper = tuple(int(c * 255) for c in PAPER)
@@ -511,8 +515,10 @@ def entry_pages(size, head, entries_list, per_page=None):
         pages.append(page)
         i = j
 
-    # folios
+    # Folios are the book's page numbers, not the dictionary's: an index that
+    # says "see 37" must find a page that says 37.
     for n, pg in enumerate(pages):
         d = ImageDraw.Draw(pg)
-        d.text((w / 2, int(h * 0.945)), str(n + 1), font=fsm, fill=soft, anchor="mm")
+        d.text((w / 2, int(h * 0.945)), str(start_folio + n), font=fsm,
+               fill=soft, anchor="mm")
     return pages, page_of

@@ -215,7 +215,7 @@ def contents_page(size, entries):
     return page
 
 
-def index_pages(size, entries, per_page=None):
+def index_pages(size, entries, per_page=None, start_folio=None):
     """An index set in two columns, as an index should be.
 
     One narrow column leaves two thirds of the page blank and forces the list
@@ -256,6 +256,10 @@ def index_pages(size, entries, per_page=None):
                 draw.text((x0, y), name, font=f, fill=ink)
                 draw.text((x1, y), folio, font=f, fill=soft, anchor="ra")
                 y += lead
+        if start_folio is not None:
+            fnum = decor.font("antiqua", max(10, int(w * 0.0105)))
+            draw.text((w / 2, int(h * 0.945)), str(start_folio + page_no),
+                      font=fnum, fill=soft, anchor="mm")
         pages.append(page)
     return pages
 
