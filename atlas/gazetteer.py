@@ -227,6 +227,18 @@ class Entry:
 
 _RANK_WORD = {0: "city", 1: "market town", 2: "village", 3: "hamlet"}
 
+# Why a town is where it is.  These are the measured site kinds from
+# `atlas.sites`, and a dictionary entry may no more invent one than it may
+# invent a population.
+_SITE_CLAUSE = {
+    "river_mouth": "near a river mouth",
+    "lake_outlet": "beside a lake outlet",
+    "harbour": "on sheltered water",
+    "confluence": "where two rivers meet",
+    "crossing": "on a river",
+    "gate": "at a gap in the hills",
+}
+
 
 def _m(value, step=0):
     """Metres, grouped."""
@@ -253,6 +265,13 @@ def _town_entry(t, prov_name):
     else:
         site = ""
     text = f"{_article(head)} {head}{where}{site}"
+    site_kind = getattr(t, "site", "")
+    clause = _SITE_CLAUSE.get(site_kind)
+    # "on the Svaith, on a river" says the same thing twice: when the entry
+    # already names the river the town stands on, the crossing clause adds
+    # nothing and is left out.
+    if clause and not (site_kind == "crossing" and t.river):
+        text += f", {clause}"
     if t.elev_m >= 3:
         text += f", {_m(t.elev_m)} m above the sea"
     text += f"; population {t.pop:,}."

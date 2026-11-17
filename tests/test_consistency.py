@@ -283,6 +283,30 @@ def test_a_city_is_bigger_than_a_market_town_and_a_village():
     assert city >= 10000, f"the largest city holds only {city}"
 
 
+def test_a_place_name_does_not_lie():
+    """A suffix is a claim about the ground; the survey must support it.
+
+    Names used to take a suffix from the whole inventory, so a random seed
+    could put a -mouth on a hilltop and a -haven in a valley.  The site is now
+    measured before the name is drawn, and this test checks the claim against
+    a second reading of the same arrays.
+    """
+    from atlas import sites
+
+    w, labels = _world_and_labels()
+    feats = features.measure(w, labels)
+    lying = []
+    for t in feats.towns:
+        allowed = sites.SUFFIX_SITES.get(t.suffix)
+        if allowed and not set(t.site_tags).intersection(allowed):
+            lying.append((t.name, t.suffix, t.site, t.site_tags))
+    assert not lying, f"names that outrun their ground: {lying}"
+
+    # A truthfulness test that checks no names is vacuous.
+    claimed = [t.name for t in feats.towns if t.suffix in sites.SUFFIX_SITES]
+    assert claimed, "no settlement name makes a geographical claim"
+
+
 def test_the_longest_river_is_a_river_and_not_a_country():
     w, labels = _world_and_labels()
     feats = features.measure(w, labels)

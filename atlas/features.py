@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import sites
 from .climate import BIOMES
 from .hydro import OFFSETS
 
@@ -53,6 +54,12 @@ class Town:
     to_seat_km: float = 0.0
     coast_km: float = -1.0
     pop: int = 0
+    # Why the town is where it is: measured from the same height, drainage and
+    # lake arrays the plate is drawn from.  A name's suffix may only claim one
+    # of these.
+    site: str = "plain"
+    site_tags: tuple = ()
+    suffix: str = ""
 
 
 @dataclass
@@ -266,15 +273,19 @@ def measure(world, labels) -> Features:
                 drained_km2=float(acc[y * ww + x]) * cell_area,
             ))
 
+    site_fields = sites.fields(world)
     for lb in labels:
         if lb.kind == "town":
             x, y = int(lb.x), int(lb.y)
+            tags = sites.tags_at(site_fields, x, y)
             feats.towns.append(Town(
                 name=lb.text, x=x, y=y, prov=prov_at(x, y),
                 rank=getattr(lb, "rank", 2), nearest_km=float("inf"),
                 capital=bool(getattr(lb, "capital", False)),
                 elev_m=float(max(h[y, x], 0.0)),
                 coast_km=float(inland[y, x]) * 4200.0,
+                site=sites.primary(tags), site_tags=tags,
+                suffix=getattr(lb, "suffix", ""),
             ))
     for t in feats.towns:
         for other in feats.towns:

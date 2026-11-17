@@ -113,14 +113,32 @@ class Namer:
             w += "a"
         return w.capitalize()
 
-    def place(self, culture: Culture, kind: str = "region", suffix: bool = True) -> str:
+    def place(self, culture: Culture, kind: str = "region", suffix: bool = True,
+              suffix_pool=None) -> str:
         """A name that reads as a place, not as a random string."""
+        return self.place_suffixed(culture, kind, suffix, suffix_pool)[0]
+
+    def place_suffixed(self, culture: Culture, kind: str = "region",
+                       suffix: bool = True, suffix_pool=None) -> tuple[str, str]:
+        """A name, and the suffix it actually took.
+
+        The suffix is returned rather than guessed from the finished word: a
+        stem may end in the same letters by accident, and a claim about the
+        ground has to be checked against the suffix that was chosen, not
+        against a coincidence.
+        """
+        pool = list(culture.suffixes[kind])
+        if suffix_pool:
+            allowed = [s for s in suffix_pool if s in pool]
+            if allowed:
+                pool = allowed
+        suf = ""
         for _ in range(40):
             # A suffixed name gets a two-syllable root, so "Svaith" + "land"
             # stays a name and does not become a paragraph.
             base = self.word(culture, syllables=2 if suffix else None)
             if suffix:
-                suf = _pick(self.rng, culture.suffixes[kind])
+                suf = _pick(self.rng, pool)
                 # Join cleanly: drop a trailing vowel before a vowel suffix.
                 if base[-1].lower() in "aeiouy" and suf[0].lower() in "aeiouy":
                     base = base[:-1]
@@ -140,8 +158,8 @@ class Namer:
                 continue
             if name not in self._used:
                 self._used.add(name)
-                return name
-        return name
+                return name, suf
+        return name, suf
 
     def title(self, culture: Culture) -> str:
         return self.place(culture, "region", suffix=True)

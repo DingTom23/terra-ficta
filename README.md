@@ -38,7 +38,7 @@ finished plate:
 | **Climate** | latitude and altitude temperature, orographic precipitation with rain shadows, Whittaker biomes, tinted into the lowlands and keyed in the legend |
 | **Provinces** | grown from watersheds, so borders follow the divides; drawn as a dotted rule |
 | **Roads** | a minimum spanning tree decides which towns connect, A\* over a terrain cost field decides where each road runs |
-| **Names** | a small invented phonology per region, so names within a province sound related |
+| **Names** | a small invented phonology per region, so names within a province sound related, and a suffix that must fit the ground: a *-mouth* stands at a river mouth, a *-gate* in a gap in the hills |
 | **Framing** | the plate is cut to its subject: the largest landmass plus any island that mostly falls inside it, then a furniture solver finds open water for the cartouche, compass, keys and scale bar |
 | **The physical sheet** | hypsometric tints, hillshade, jittered slope hachures drawn down the fall line, contours, coastal hachures, soundings, rhumb lines, graticule, graduated chequer border, compass, scale, two keys, cartouche, plate number |
 | **The political sheet** | the same country flat-washed by province, boundaries drawn solid, a numbered key, and the relief dropped to a whisper |
@@ -133,8 +133,12 @@ scatter of floes at the edge — because a straight edge of ice is the one thing
 arctic chart never shows, and a field of white shapes is camouflage, not ice.
 
 **7. Names.** Each region draws from its own phonology — a distinct onset/vowel/
-coda inventory — and its own set of toponymic suffixes. Labels are placed
-greedily, measured with the font that will actually draw them.
+coda inventory. Before a settlement is named, its site is measured: river
+mouth, lake outlet, confluence, crossing, harbour, gap in the hills. The
+suffix is then drawn from the claims the ground supports — *-mouth* only at a
+mouth, *-ford* and *-bridge* only at a crossing, *-gate* only in a gap — while
+the ordinary settlement suffixes remain available everywhere. Labels are
+placed greedily, measured with the font that will actually draw them.
 
 **8. The sheet.** Layers are composited in ink order, then laid onto toned paper.
 
@@ -161,6 +165,7 @@ atlas/
   render.py      the drawing itself, physical and political
   decor.py       frame, graticule, compass, scale bar, cartouche, legend
   naming.py      invented phonologies and toponymy
+  sites.py       what kind of place a settlement stands on
   labels.py      feature extraction and label placement
   features.py    measuring the country: rivers, towns, ranges, provinces
   compose.py     the finished sheet
@@ -196,6 +201,8 @@ is not "does it run" but the claims the book makes about the world:
   out the same labels;
 - every province that is tinted on the plate is also named on it;
 - every town speaks the language of the province it stands in;
+- every toponymic suffix is true to the ground: a *-mouth* town is at a river
+  mouth, a *-gate* town in a gap, a *-ford* town at a crossing;
 - the river the prose calls longest is the one the measurement returns, printed
   with its measured length;
 - a crop re-routes with its depressions filled, so no channel ends in mid-air;
@@ -237,9 +244,9 @@ Still wrong, and known to be wrong:
 - Region names are now compulsory, but on about one seed in six a province
   still finds nowhere to write: it is then tinted on the plate and missing from
   the key, which is the one inconsistency a reader will actually notice.
-- The dictionary is thin. Every entry is a measurement — a rank, an elevation,
-  a distance — and nothing else. There is no trade, no history, no reason for
-  the town to be there. A real gazetteer entry has a *why*.
+- The dictionary now says why the ground holds a town — on a river, by a
+  lake outlet, in a gap — but not what it trades, who founded it, or what
+  happened there. A real gazetteer entry has a history, not only a site.
 - The scale is now honest, and that is the newest thing in the book: a country
   spans sixteen degrees of latitude, about seventeen hundred kilometres, so a
   river is 800 km long, a market town holds 11,000 people and its neighbour

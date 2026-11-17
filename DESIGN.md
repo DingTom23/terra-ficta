@@ -836,3 +836,48 @@ The width of a branch must fall.  An attempt to make the spine rougher by jitter
 segment's width between 0.72 and 1.06 of its parent merged the arms into one smooth lens --
 six seeds, six ellipses, exactly the shape the spine was introduced to remove.  A branch that
 is as wide as the thing it branches from is not a branch.
+
+## 34. A name is a claim about the ground
+
+The phonology made names *sound* like a place, but the suffix was drawn from the whole
+inventory without asking where the town stood.  A settlement on a hilltop could be called
+*Beivomouth*, and one in a valley *Sehigate*.  The book's own rule -- every fact in the prose
+must be a field something measured -- was broken by the one word printed largest on the sheet.
+Measured on seed 1, 30 of 82 settlement names made a claim the terrain contradicted.
+
+The repair is to measure the site *before* drawing the name.  `atlas/sites.py` classifies
+every cell from the arrays the plate already uses:
+
+- **river mouth** -- a channel cell whose D8 receiver is sea.  A receiver of -1 is the edge of
+  the sheet, not a coast, so a river leaving the neat line is not promoted to a mouth.
+- **lake outlet** -- a lake cell whose receiver leaves the lake.  Only lakes that survive a
+  morphological opening count: the median "lake" here is two cells, and calling a town
+  "beside a lake outlet" because a pond drains there is a true statement that explains
+  nothing.  After the opening, lake outlets fall from 19.3 per cent of the land to 2.4.
+- **confluence** -- a channel cell with at least two donors each carrying a real share (22 per
+  cent) of the flow; counting every donor would make a raindrop a confluence.
+- **crossing** -- a channel reach within two cells of a channel, away from the estuary and
+  away from lakes.  The raster does not record bank width, so the honest claim is "on a
+  river, not at its mouth", and that is all the suffix is allowed to say; the dictionary
+  prints "on a river", never "at a ford" it cannot see.
+- **harbour** -- water that can see land on opposite sides eight cells away and is deeper than
+  eight metres.  A straight coast has land on one side only; a bay or an estuary has both.
+- **gate** -- a low way between higher ground: two opposite directions, a ridge apart, both
+  standing 120 m above the cell.  On a raster this coarse, this finds valley gaps and saddles
+  without pretending to tell them apart.
+
+Each site contributes a set of suffixes the name may wear.  `-mouth` requires a river mouth;
+`-haven` a harbour or mouth; `-ford` and `-bridge` a crossing; `-gate` a gap.
+`-holm` is not in any pool, because an island cannot be measured cheaply at this resolution
+and a name that cannot be checked should not be printed.  The ordinary suffixes -- *-stead*,
+*-thorpe*, *-burg*, *-wick* -- assert nothing about the ground and remain available
+everywhere, so a site is never forced into a claim it cannot support.
+
+`Namer.place_suffixed()` returns the suffix it chose rather than letting the test guess from
+the finished word: a stem can end in the same letters by accident.  The test re-derives the
+site from the arrays and checks the claim.  The dictionary now also says why the town is
+there -- "at a river crossing", "beside a lake outlet" -- from the same field the name used.
+
+The result on seed 1 is 30 names contradicted by the ground before, none after, and the
+ordinary names still sound like the province they stand in.  What the system still cannot
+say is *when* the town was founded or *what* it trades; a site is a reason, not a history.

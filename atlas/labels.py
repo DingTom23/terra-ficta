@@ -19,6 +19,7 @@ from dataclasses import dataclass, field, replace
 
 import numpy as np
 
+from . import sites
 from .naming import Namer, Culture
 
 
@@ -48,6 +49,10 @@ class Label:
     # Whether this name actually reached the sheet.  The caller gets every
     # place in the country so the geography is complete; only these are inked.
     drawn: bool = False
+    # The suffix the namer chose.  Kept because the suffix is a claim about
+    # the ground and the test must compare the claim, not a coincidence of
+    # letters in the stem.
+    suffix: str = ""
 
     def box(self):
         # A rotated name occupies the box its rotated self needs, not the box
@@ -164,6 +169,16 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
                 return name
         return name
 
+    def unique_suffixed(fn):
+        """As ``unique``, but carries back the suffix the name actually took."""
+        name, suffix = "", ""
+        for k in range(60):
+            name, suffix = fn(k)
+            if name.upper() not in used:
+                used.add(name.upper())
+                return name, suffix
+        return name, suffix
+
     def named(key, culture, kind, **kw):
         """One name, from a generator that depends only on what is named."""
         return namer.derive(key)
@@ -277,6 +292,7 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
 
     # --- towns ----------------------------------------------------------
     acc = world.accumulation
+    site_fields = sites.fields(world)
     coast = np.zeros_like(land)
     coast[1:-1, 1:-1] = (
         land[1:-1, 1:-1] & ~(land[:-2, 1:-1] & land[2:, 1:-1] & land[1:-1, :-2] & land[1:-1, 2:])
@@ -327,12 +343,20 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
         # gave a country where every neighbouring village spoke a different
         # tongue and the province name matched neither of them.
         ci = _culture_index(naming, cultures, x, y, fallback=i)
+        # The suffix is chosen from the ground, not from the whole inventory.
+        # A place called -mouth is at a mouth because the site was measured
+        # before the name was drawn, not because the dice favoured it.
+        tags = sites.tags_at(site_fields, x, y)
+        pool = sites.suffixes_for(tags)
+        text, suffix = unique_suffixed(
+            lambda k: namer.derive(("town", round(x), round(y), k))
+                      .place_suffixed(cultures[ci], "town", suffix=True,
+                                      suffix_pool=pool))
         labels.append(Label(
-            text=unique(lambda k: namer.derive(("town", round(x), round(y), k))
-                               .place(cultures[ci], "town", suffix=True)),
+            text=text,
             x=float(x), y=float(y), kind="town", size=15, priority=6, dot=True,
             rank=ranks[i], prov=int(prov[int(y), int(x)]) if prov is not None else -1,
-            culture=ci,
+            culture=ci, suffix=suffix,
         ))
 
     # Hamlets.  A country of this size has far more places than a sheet can
@@ -352,12 +376,17 @@ def build_labels(world, namer: Namer, n_regions=5, n_seas=3, n_ranges=3,
             break
     for i, (x, y) in enumerate(picked_h):
         ci = _culture_index(naming, cultures, x, y, fallback=n + i)
+        tags = sites.tags_at(site_fields, x, y)
+        pool = sites.suffixes_for(tags)
+        text, suffix = unique_suffixed(
+            lambda k: namer.derive(("hamlet", round(x), round(y), k))
+                      .place_suffixed(cultures[ci], "town", suffix=True,
+                                      suffix_pool=pool))
         labels.append(Label(
-            text=unique(lambda k: namer.derive(("hamlet", round(x), round(y), k))
-                               .place(cultures[ci], "town", suffix=True)),
+            text=text,
             x=float(x), y=float(y), kind="town", size=15, priority=6, dot=True,
             rank=3, prov=int(prov[int(y), int(x)]) if prov is not None else -1,
-            culture=ci,
+            culture=ci, suffix=suffix,
         ))
 
     # --- rivers ---------------------------------------------------------
