@@ -519,3 +519,35 @@ def test_no_two_names_on_a_plate_collide():
             kb, tb, b = boxes[j]
             hit = not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
             assert not hit, f"{ka} {ta!r} overlaps {kb} {tb!r}"
+
+
+def test_a_section_is_a_real_profile():
+    """A section must follow the ground it claims to cut through."""
+    from atlas import features, section
+
+    world, labels = _world_and_labels()
+    feats = features.measure(world, labels)
+    lines = section.choose(world, feats)
+    assert len(lines) >= 2, "a country needs at least two lines of section"
+    for line in lines:
+        dist, elev = section.line_profile(world, line["p0"], line["p1"])
+        assert len(dist) == len(elev) >= 100
+        assert abs(float(dist[0])) < 1e-9
+        assert float(dist[-1]) > 50.0
+        assert np.all(np.diff(dist) >= -1e-9), "distance ran backwards"
+        assert float(elev.max()) <= float(world.height.max()) + 1e-6
+        assert float(elev.min()) >= float(world.height.min()) - 1e-6
+        assert float(elev.max()) > 0, "the section never crosses land"
+
+
+def test_the_section_page_keeps_its_ink_on_the_page():
+    from atlas import features, section
+
+    world, labels = _world_and_labels()
+    feats = features.measure(world, labels)
+    pg = section.page((1200, 850), world, feats, "Testland")
+    a = np.asarray(pg.convert("L"))
+    ys, xs = np.where(a < 150)
+    assert len(xs) > 1000, "the section page is blank"
+    assert xs.min() >= 30 and xs.max() <= 1170, "ink outside the page"
+    assert ys.min() >= 10 and ys.max() <= 840, "ink outside the page"

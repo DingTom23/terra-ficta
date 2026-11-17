@@ -881,3 +881,36 @@ there -- "at a river crossing", "beside a lake outlet" -- from the same field th
 The result on seed 1 is 30 names contradicted by the ground before, none after, and the
 ordinary names still sound like the province they stand in.  What the system still cannot
 say is *when* the town was founded or *what* it trades; a site is a reason, not a history.
+
+## 35. A section is a promise about the ground
+
+A hillshade can suggest a mountain; only a profile can state its height against its width.  The
+book had five ways of drawing a country from above and none of looking at it from the side, which
+is the one view in which a made-up country can be caught lying.  So each country now gets a page
+of two sections: west to east through its highest cell, north to south through its capital.
+Both are sampled from the same height field the plate is drawn from, by bilinear interpolation
+along the line -- no smoothing, no invented peaks.
+
+Three decisions are worth recording.
+
+- **The line stops at the sea, not at the sheet.**  The first version ran the section the full
+  width of the terrain grid and spent two thirds of the profile on abyssal water, which flattened
+  the mountains into a scratch.  The line is now trimmed to the first and last land it crosses,
+  with a two per cent strip of sea at each end to frame the coast.
+- **The sea floor is flattened at 500 m down.**  Below that depth the ocean is not the subject;
+  letting the profile dive to -1,500 m doubled the vertical span and halved the relief.  The
+  section is a drawing of the country, not a bathymetric chart.
+- **The exaggeration is printed.**  A country 1,200 km wide and 3,500 m high is three hundred
+  times wider than it is tall.  At true scale the range would be a millimetre.  Every band
+  carries "vertical exaggeration x62" beside it, because an unlabelled exaggeration is a lie
+  about shape, and this book does not print those.
+
+Water is filled only where the ground is under it.  The first version painted a blue sheet under
+the whole band, so the country appeared to float; the sea is now drawn as runs of cells below the
+waterline, and the land polygon is clamped at it.  A lake below sea level inland shows as a notch
+of water in the fill -- which is what it is.
+
+What the page cannot show: the rock under the line.  A real geological section colours the
+formations and faults them; this one knows only the surface, so it is a profile, not a section
+in the geologist's sense, and the sheet says "profile of the ground" rather than pretending
+otherwise.

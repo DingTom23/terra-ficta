@@ -47,7 +47,8 @@ finished plate:
 | **The line sheet** | the same ground drawn without a hillshade: contours carry the height, hachures run down every slope, and the colour is withdrawn to a wash, so the relief has to be read from the line work rather than from the light |
 | **The dictionary** | one alphabetical entry per named place, set in two columns, every figure in it measured off the terrain: rank, population, elevation, distance inland, the river it stands on, the range it rises in, the sea it reaches |
 | **The journey** | a route from the seat of government to the town furthest from any other, written up as a road book: where it crosses water, where it climbs, which province it enters, and how far it has come, every figure measured on the way |
-| **The book** | title page, colophon, contents with dot leaders, numbered plates, a survey and a dictionary per country, an index of names whose folios point at the entries |
+| **The sections** | two measured profiles cut through the country — west to east over the highest ground, north to south through the capital — with the vertical exaggeration printed, because a country is a hundred times wider than its mountains are high |
+| **The book** | title page, colophon, contents with dot leaders, numbered plates, a survey, a dictionary, a journey and a page of sections per country, an index of names whose folios point at the entries |
 
 Output is a PNG at roughly 2700×2000, a bound PDF of forty-odd pages, and a
 static viewer you can pan and zoom.

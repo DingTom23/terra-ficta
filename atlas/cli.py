@@ -14,7 +14,7 @@ from .config import WorldSpec
 from .world import build_world
 from .naming import Namer, roman
 from .compose import compose
-from . import book, features, gazetteer, journey, web
+from . import book, features, gazetteer, journey, section, web
 
 COLOPHON = [
     "Every plate in this book was computed, not drawn.  A single integer is "
@@ -183,12 +183,13 @@ def main(argv=None):
         ents = gazetteer.entries(view, labels, feats)
         trip = journey.plan(view, feats)
         jr = journey.text(trip, view, feats, name) if trip else None
+        sec_page = section.page(book.PAGE, view, feats, name)
         sheets.append(dict(plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
                            anc_page=anc_page, anc_plate=anc_num,
                            cli_page=cli_page, cli_plate=cli_num,
                            eng_page=eng_page, eng_plate=eng_num,
                            title=title, subtitle=subtitle, paras=paras, labels=labels,
-                           entries=ents, journey=jr))
+                           entries=ents, journey=jr, sections=sec_page))
         cards.append((path, title, subtitle, paras))
         viewer_items.append({"image": path.name, "title": title,
                              "subtitle": subtitle, "paras": paras,
@@ -293,6 +294,12 @@ def _assemble_book(sheets, seeds):
             contents.append(("", sheet["title"] + " \u2014 a journey across it", folio))
             body.append(gazetteer.text_page(jr[0], jr[1], jr[2], size=size,
                                             seed=sum(ord(c) for c in jr[0]) % 1000))
+
+        sec_page = sheet.get("sections")
+        if sec_page is not None:
+            folio += 1
+            contents.append(("", sheet["title"] + " \u2014 sections across it", folio))
+            body.append(sec_page)
 
         num = (sheet["plate"] or "").replace("PLATE ", "") or "I"
         for lb in sheet["labels"]:
