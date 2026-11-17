@@ -103,14 +103,15 @@ The pipeline is ordered, and the order matters more than any single step.
 landmass  →  drainage  →  carved valleys  →  fine detail  →  drainage again
 ```
 
-**1. Landmass.** A branching spine of tapering segments is grown from a core, along
-a common grain, and the land is everything within a varying distance of it — long
-capes, bays between the arms, a width that falls towards the ends. The spine is then
-displaced by domain-warped noise. Sea level is chosen by quantile, so the land
-fraction is exactly what was asked for. Two things are kept strictly apart here: the
-potential decides *where the land is*, and a separate relief field decides *how high
-it is*. Conflating them yields the classic procedural-geography tell — a continent
-that is a smooth dome.
+**1. Landmass.** The main island is a radial field with a handful of low
+harmonics — two lobes, three, five, eight — so the outline has bays and capes
+without a straight edge or a joint anywhere. A few small islands are unioned
+in, each with its own lobed profile written into its distance field, and the
+whole is displaced by domain-warped noise. Sea level is chosen by quantile, so
+the land fraction is exactly what was asked for. Two things are kept strictly
+apart here: the potential decides *where the land is*, and a separate relief
+field decides *how high it is*. Conflating them yields the classic
+procedural-geography tell — a continent that is a smooth dome.
 
 **2. Drainage.** Closed basins are filled with a priority flood over a bucket
 queue, then water is routed by steepest descent and accumulated by Kahn's

@@ -157,7 +157,7 @@ def page(size=(3600, 1950), countries=None):
 
     # Furniture is fixed before anything is drawn, so the country names can be
     # kept out of it.  The ocean is the only place any of it can go.
-    cart = (wx(3.0), wy(89.0), wx(56.0), wy(74.0))
+    cart = (wx(3.0), wy(89.0), wx(52.0), wy(79.0))
     comp_r = int(plate_w * 0.016)
     comp_c = (wx(12.0), wy(14.0))
     key_rect = (wx(122.0), wy(24.0), wx(178.0), wy(6.0))
@@ -219,12 +219,14 @@ def page(size=(3600, 1950), countries=None):
         name = f"{_roman(i + 1)}  {c['name'].upper()}"
         bx0, by0, bx1, by1 = it["bbox"]
         cx = (bx0 + bx1) / 2.0
-        for fsize in (24, 21, 18):
+        base = max(12, int(round(plate_w * 0.0067)))
+        for fsize in (base, int(base * 0.88), int(base * 0.77)):
             f = decor.font("antiqua-bold", fsize)
             tw_name = sum(draw.textlength(ch, font=f) for ch in name)
             tw_name += fsize * 0.18 * max(0, len(name) - 1)
-            over = (by0 - 28, by1 + 32, by0 - 58, by1 + 62, by0 - 88)
-            under = (by1 + 32, by0 - 28, by1 + 62, by0 - 58, by1 + 92)
+            ov, un = fsize * 1.15, fsize * 1.35
+            over = (by0 - ov, by1 + un, by0 - ov * 2, by1 + un * 2, by0 - ov * 3)
+            under = (by1 + un, by0 - ov, by1 + un * 2, by0 - ov * 2, by1 + un * 3)
             for ty in (over if i % 2 == 0 else under):
                 tx = min(max(cx, box_l + 8 + tw_name / 2), box_r - 8 - tw_name / 2)
                 rect = (tx - tw_name / 2, ty - fsize * 0.75,

@@ -180,13 +180,40 @@ def _segment_distance(x, y, seg):
     return np.hypot(x - (x0 + t * vx), y - (y0 + t * vy))
 
 
+def _island_body(rng, spec: WorldSpec, x, y):
+    """The main landmass: a compact island with a lobed, irregular outline.
+
+    A union of capsules gives triangles and starfish.  A single radial field
+    with a handful of low harmonics gives something much closer to a real
+    landmass: one mass, a few deep bays, a few long capes, and no straight
+    edge that the eye can name.  The coastline noise in build_base roughens
+    what is left.
+    """
+    aspect = spec.aspect
+    cx = aspect * (0.5 + rng.uniform(-0.04, 0.04))
+    cy = 0.5 + rng.uniform(-0.04, 0.04)
+    th = np.arctan2(y - cy, (x - cx) / aspect)
+    ph = rng.uniform(0.0, 2.0 * np.pi, 5)
+    lobes = (1.0
+             + 0.20 * np.sin(2.0 * th + ph[0])
+             + 0.13 * np.sin(3.0 * th + ph[1])
+             + 0.09 * np.sin(5.0 * th + ph[2])
+             + 0.05 * np.sin(8.0 * th + ph[3]))
+    rr = np.hypot((x - cx) / (0.40 * aspect), (y - cy) / 0.40)
+    return 1.0 - rr / lobes
+
+
 def build_base(spec: WorldSpec):
     """Return (height, meta); sea level is 0, land is positive."""
     rng = np.random.default_rng(spec.seed)
     x, y = _grid(spec)
     blobs = _blobs(rng, spec)
-    segs = _spine(rng, spec)
-    body = 1.0 - _spine_distance(x, y, segs)
+    segs = _spine(rng, spec)          # mountain belts only now
+    body = _island_body(rng, spec, x, y)
+    isles = [b for b in blobs if b[5] < 0.8]
+    if isles:
+        body = np.maximum(body, 1.0 - _blob_distance(x, y, isles))
+    body = blur(body, max(1.0, spec.width / 500.0), passes=1)
 
     # --- continental potential: shape only ------------------------------
     warper = warp(spec.seed + 11, amp=1.0, octaves=4)
@@ -206,7 +233,7 @@ def build_base(spec: WorldSpec):
     dx_, dy_ = warp(spec.seed + 43, amp=1.0, octaves=2)(
         x, y, freq=spec.coast_freq * 7.0, strength=0.020)
     detail_coast = fbm(spec.seed + 29, octaves=4)(dx_, dy_, freq=spec.coast_freq * 5.5, gain=0.5)
-    potential = body + band * (spec.coast_noise * coast + 0.30 * detail_coast)
+    potential = body + band * (spec.coast_noise * coast + 0.38 * detail_coast)
 
     # Keep the continent off the edge of the sheet: a map whose land runs off
     # the paper reads as a crop, not as a place.

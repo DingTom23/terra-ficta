@@ -955,3 +955,22 @@ generalised sea level has less area than the true land. The silhouette is
 therefore stretched by the square root of the area it lost, so the drawn shape
 still compares by the area the gazetteer states. Shape is illustrative; area is
 measured.
+
+
+## 38. An island is a radial field, not a skeleton
+
+The first attempt at fixing the "heap of balls" coastline was a branching spine
+of tapering capsules. It removed the round lobes and replaced them with
+something worse: every arm was a wedge, so the silhouettes read as triangles
+and starfish. The failure is structural, not a matter of tuning. A level set of
+a union of capsules keeps every crease between capsules, and a tapering capsule
+*is* a triangle with a rounded tip.
+
+The landmass is now a radial field: the radius is modulated by four low
+harmonics (2, 3, 5 and 8 lobes) around a centre that is slightly off the middle
+of the sheet. That gives one compact mass with deep bays and long capes, and no
+place where two primitives meet. Small islands keep their own lobed distance
+fields, so the archipelago does not inherit the main island's harmonics.
+
+The spine still exists, but only to place mountain belts: orogeny follows a
+grain even when the coast does not.

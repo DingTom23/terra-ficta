@@ -81,7 +81,28 @@ def _route(towns, start, end, height, land, factor=3):
     leg = roads._astar(cost, a, b)
     if not leg or len(leg) < 2:
         return []
-    return [(x * f, y * f) for x, y in leg]
+    # The search runs on a coarser grid than the terrain.  A cell that is
+    # passable there can still contain water at full resolution, so every
+    # point is pulled onto the nearest land cell before it becomes a station.
+    hh, ww = height.shape
+    out = []
+    for x, y in leg:
+        fx, fy = x * f, y * f
+        if not (0 <= fx < ww and 0 <= fy < hh) or height[fy, fx] <= 0:
+            best = None
+            for r in range(1, 2 * f + 3):
+                for yy in range(fy - r, fy + r + 1):
+                    for xx in range(fx - r, fx + r + 1):
+                        if 0 <= xx < ww and 0 <= yy < hh and height[yy, xx] > 0:
+                            d = (xx - fx) ** 2 + (yy - fy) ** 2
+                            if best is None or d < best[0]:
+                                best = (d, xx, yy)
+                if best is not None:
+                    break
+            if best is not None:
+                fx, fy = best[1], best[2]
+        out.append((fx, fy))
+    return out
 
 
 def plan(world, feats, factor=3):
