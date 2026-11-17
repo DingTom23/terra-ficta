@@ -14,7 +14,7 @@ from .config import WorldSpec
 from .world import build_world
 from .naming import Namer, roman
 from .compose import compose
-from . import book, features, gazetteer, journey, section, web, worldmap
+from . import book, compare, features, gazetteer, journey, section, web, worldmap
 
 COLOPHON = [
     "Every plate in this book was computed, not drawn.  A single integer is "
@@ -189,7 +189,9 @@ def main(argv=None):
                            cli_page=cli_page, cli_plate=cli_num,
                            eng_page=eng_page, eng_plate=eng_num,
                            title=title, subtitle=subtitle, paras=paras, labels=labels,
-                           entries=ents, journey=jr, sections=sec_page))
+                           entries=ents, journey=jr, sections=sec_page,
+                           stats=dict(river=int(round(max((r.length_km for r in feats.rivers),
+                                                          default=0))))))
         cards.append((path, title, subtitle, paras))
         viewer_items.append({"image": path.name, "title": title,
                              "subtitle": subtitle, "paras": paras,
@@ -256,6 +258,12 @@ def _assemble_book(sheets, seeds):
         folio += 1
         contents.append(("", "The known world", folio))
         body.append(book.place_plate(worldmap.page((3600, 1950), countries)))
+
+        folio += 1
+        contents.append(("", "The six countries compared", folio))
+        cmp_countries = [dict(c, river=sh.get("stats", {}).get("river", 0))
+                         for c, sh in zip(countries, sheets)]
+        body.append(compare.stamp_folio(compare.page(size, cmp_countries), folio))
 
     for sheet in sheets:
         folio += 1

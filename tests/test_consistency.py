@@ -592,3 +592,20 @@ def test_the_world_sheet_does_not_cut_a_country():
         land = w.height > 0
         edge = int(land[0].sum() + land[-1].sum() + land[:, 0].sum() + land[:, -1].sum())
         assert edge == 0, f"seed {seed} still runs {edge} cells into the grid edge"
+
+
+def test_the_comparison_plate_draws_every_country():
+    """A comparative plate that compares nothing is a blank page."""
+    from atlas import compare
+    from atlas.cli import latitude_for
+
+    countries = []
+    for seed in (1, 3):
+        lt, lb = latitude_for(seed)
+        countries.append(dict(seed=seed, lat_top=lt, lat_bottom=lb,
+                              name=f"Country {seed}", river=100))
+    pg = compare.page((1200, 850), countries)
+    assert pg.size == (1200, 850)
+    a = np.asarray(pg.convert("L")).astype(np.float32)
+    assert a.std() > 5.0, "the comparison plate is blank"
+    assert (a < 180).mean() > 0.004, "the comparison plate has no silhouettes"

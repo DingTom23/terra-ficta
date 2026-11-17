@@ -41,6 +41,7 @@ finished plate:
 | **Names** | a small invented phonology per region, so names within a province sound related, and a suffix that must fit the ground: a *-mouth* stands at a river mouth, a *-gate* in a gap in the hills |
 | **Framing** | the plate is cut to its subject: the largest landmass plus any island that mostly falls inside it, then a furniture solver finds open water for the cartouche, compass, keys and scale bar |
 | **The known world** | a frontispiece on a single sheet: the six countries set at their true latitudes and scaled by the same rule, each fitted whole inside its own survey limits, with rhumb lines through the open water, the oceans named, and a key that numbers them |
+| **The comparison** | the six countries as silhouettes at a single scale, ordered by measured area, so the survey reads as a group and not just a sequence of sheets |
 | **The physical sheet** | hypsometric tints, hillshade, jittered slope hachures drawn down the fall line, contours, coastal hachures, soundings, rhumb lines, graticule, graduated chequer border, compass, scale, two keys, cartouche, plate number |
 | **The political sheet** | the same country flat-washed by province, boundaries drawn solid, a numbered key, and the relief dropped to a whisper |
 | **The ancient sheet** | the same ground a century earlier: the borders redrawn from a different partition of the same watersheds, the provinces renamed, the pigments browned and the paper darkened, so the two sheets can be read side by side |

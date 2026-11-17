@@ -936,3 +936,22 @@ the same spine, the same ranges, the same coast at a smaller scale.
 
 The empty water is then named and crossed with rhumbs. A blank sea on a period
 chart is not empty; it is *the* ocean, and it says so.
+
+
+## 37. A comparison must share one scale
+
+A book of plates makes every country the same size on the page, because each
+plate is scaled to fill its sheet. That is exactly the wrong thing for a
+comparison: the reader can see six countries and learn nothing about their
+relative extent.
+
+The comparison plate therefore fixes one scale for all six, set by the widest,
+and orders them by measured area. Each country is drawn as its whole
+silhouette, not the neat-line crop used on its plates, because a comparison of
+cropped fragments would compare the crops.
+
+That creates a small arithmetic problem: a whole-country silhouette at a
+generalised sea level has less area than the true land. The silhouette is
+therefore stretched by the square root of the area it lost, so the drawn shape
+still compares by the area the gazetteer states. Shape is illustrative; area is
+measured.
