@@ -914,3 +914,25 @@ What the page cannot show: the rock under the line.  A real geological section c
 formations and faults them; this one knows only the surface, so it is a profile, not a section
 in the geologist's sense, and the sheet says "profile of the ground" rather than pretending
 otherwise.
+
+
+## 36. A world sheet is a locator, not a continent
+
+The plates each show one country cropped by its neat line. Put six of them on one
+sheet and the reader finally sees the survey as a whole -- but only if the sheet
+respects the two rules a locator has and a plate does not.
+
+The first is **equal scale**. Every country is drawn at the same pixels per
+degree, so a country that is 1,700 km wide is the same width on the sheet as
+another that is 1,700 km wide. The aspect is equirectangular at 20 pixels to the
+degree, and the page asserts it: if the pixels per degree of longitude and of
+latitude ever diverge, the sheet is a diagram, not a map.
+
+The second is **the whole country**. On a plate the neat line is allowed to cut
+land -- that is what a survey sheet is. On the world sheet a ruler-straight cut
+reads as a torn map, so each country is generated at a slightly higher sea level
+until its land clears the frame. It is a generalisation, not a different country:
+the same spine, the same ranges, the same coast at a smaller scale.
+
+The empty water is then named and crossed with rhumbs. A blank sea on a period
+chart is not empty; it is *the* ocean, and it says so.

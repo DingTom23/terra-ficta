@@ -565,3 +565,30 @@ def test_the_dictionary_prints_the_book_folio_it_is_given():
     b = np.asarray(pb[0].convert("L")).astype(np.int16)
     strip = slice(int(850 * 0.92), int(850 * 0.97))
     assert int(np.abs(a[strip] - b[strip]).sum()) > 0, "the folio is fixed, not passed in"
+
+
+def test_the_world_sheet_is_a_map_and_not_a_blank():
+    """The frontispiece must have a frame, a sea and a cartouche on it."""
+    from atlas import worldmap
+
+    pg = worldmap.page((1800, 1050), [])
+    assert pg.size == (1800, 1050)
+    a = np.asarray(pg.convert("L")).astype(np.float32)
+    assert a.std() > 3.0, "the world sheet is blank"
+    assert (a < 180).mean() > 0.002, "the world sheet has no ink"
+
+
+def test_the_world_sheet_does_not_cut_a_country():
+    """No country may be printed with a ruler-straight edge on the world map."""
+    from atlas import worldmap
+    from atlas.cli import latitude_for
+
+    for seed in (3, 7):
+        lt, lb = latitude_for(seed)
+        frac = worldmap._fit_fraction(seed, lt, lb)
+        assert 0.15 <= frac <= 0.34, "the sea level ran away"
+        w = build_world(WorldSpec(seed=seed, width=240, height=163,
+                                  lat_top=lt, lat_bottom=lb, land_fraction=frac))
+        land = w.height > 0
+        edge = int(land[0].sum() + land[-1].sum() + land[:, 0].sum() + land[:, -1].sum())
+        assert edge == 0, f"seed {seed} still runs {edge} cells into the grid edge"

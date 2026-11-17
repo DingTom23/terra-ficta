@@ -40,6 +40,7 @@ finished plate:
 | **Roads** | a minimum spanning tree decides which towns connect, A\* over a terrain cost field decides where each road runs |
 | **Names** | a small invented phonology per region, so names within a province sound related, and a suffix that must fit the ground: a *-mouth* stands at a river mouth, a *-gate* in a gap in the hills |
 | **Framing** | the plate is cut to its subject: the largest landmass plus any island that mostly falls inside it, then a furniture solver finds open water for the cartouche, compass, keys and scale bar |
+| **The known world** | a frontispiece on a single sheet: the six countries set at their true latitudes and scaled by the same rule, each fitted whole inside its own survey limits, with rhumb lines through the open water, the oceans named, and a key that numbers them |
 | **The physical sheet** | hypsometric tints, hillshade, jittered slope hachures drawn down the fall line, contours, coastal hachures, soundings, rhumb lines, graticule, graduated chequer border, compass, scale, two keys, cartouche, plate number |
 | **The political sheet** | the same country flat-washed by province, boundaries drawn solid, a numbered key, and the relief dropped to a whisper |
 | **The ancient sheet** | the same ground a century earlier: the borders redrawn from a different partition of the same watersheds, the provinces renamed, the pigments browned and the paper darkened, so the two sheets can be read side by side |
@@ -50,7 +51,7 @@ finished plate:
 | **The sections** | two measured profiles cut through the country — west to east over the highest ground, north to south through the capital — with the vertical exaggeration printed, because a country is a hundred times wider than its mountains are high |
 | **The book** | title page, colophon, contents with dot leaders, numbered plates, a survey, a dictionary, a journey and a page of sections per country, an index of names whose folios point at the entries |
 
-Output is a PNG at roughly 2700×2000, a bound PDF of forty-odd pages, and a
+Output is a PNG at roughly 2700×2000, a bound PDF of a hundred-odd pages, and a
 static viewer you can pan and zoom.
 
 ---
@@ -69,7 +70,7 @@ python -m atlas --seeds 1-6 --political --gallery --viewer --book out/atlas.pdf
 # the same, plus every country as it stood a century earlier
 python -m atlas --seeds 1-6 --political --ancient --gallery --viewer --book out/atlas.pdf
 
-# the full book: four plates a country
+# the full book: five plates a country
 python -m atlas --seeds 1-6 --political --ancient --climate --gallery --viewer --book out/atlas.pdf
 
 # add the pure-line sheet to each country as well

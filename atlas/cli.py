@@ -14,7 +14,7 @@ from .config import WorldSpec
 from .world import build_world
 from .naming import Namer, roman
 from .compose import compose
-from . import book, features, gazetteer, journey, section, web
+from . import book, features, gazetteer, journey, section, web, worldmap
 
 COLOPHON = [
     "Every plate in this book was computed, not drawn.  A single integer is "
@@ -184,7 +184,7 @@ def main(argv=None):
         trip = journey.plan(view, feats)
         jr = journey.text(trip, view, feats, name) if trip else None
         sec_page = section.page(book.PAGE, view, feats, name)
-        sheets.append(dict(plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
+        sheets.append(dict(seed=seed, plate=pnum, page=page, pol_page=pol_page, pol_plate=pol_num,
                            anc_page=anc_page, anc_plate=anc_num,
                            cli_page=cli_page, cli_plate=cli_num,
                            eng_page=eng_page, eng_plate=eng_num,
@@ -246,6 +246,17 @@ def _assemble_book(sheets, seeds):
     index = {}
     body = []
     folio = 3                                   # title, colophon, contents
+
+    if sheets:
+        countries = []
+        for sh in sheets:
+            lt, lb = latitude_for(sh["seed"])
+            countries.append(dict(seed=sh["seed"], lat_top=lt, lat_bottom=lb,
+                                  name=sh["title"]))
+        folio += 1
+        contents.append(("", "The known world", folio))
+        body.append(book.place_plate(worldmap.page((3600, 1950), countries)))
+
     for sheet in sheets:
         folio += 1
         contents.append((sheet["plate"] or "", sheet["title"], folio))
