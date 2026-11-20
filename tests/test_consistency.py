@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from atlas import book, features, gazetteer, render
+from atlas import book, city, features, gazetteer, render
 from atlas.config import WorldSpec
 from atlas.labels import build_labels
 from atlas.naming import Namer
@@ -609,3 +609,40 @@ def test_the_comparison_plate_draws_every_country():
     a = np.asarray(pg.convert("L")).astype(np.float32)
     assert a.std() > 5.0, "the comparison plate is blank"
     assert (a < 180).mean() > 0.004, "the comparison plate has no silhouettes"
+
+
+def test_the_city_plan_is_deterministic():
+    """The same town, drawn twice, must be the same town."""
+    world, labels = _world_and_labels()
+    feats = features.measure(world, labels)
+    a = city.plan(world, feats, "Testland", seed=7)
+    b = city.plan(world, feats, "Testland", seed=7)
+    assert a is not None and b is not None
+    assert np.array_equal(np.asarray(a), np.asarray(b))
+
+
+def test_the_city_plan_keeps_its_ink_on_the_page():
+    world, labels = _world_and_labels()
+    feats = features.measure(world, labels)
+    img = np.asarray(city.plan(world, feats, "Testland", seed=7)).astype(np.float32)
+    assert img.shape == (1700, 2400, 3)
+    # The four corners are paper: nothing has run off the sheet.
+    for y, x in ((0, 0), (0, 2399), (1699, 0), (1699, 2399)):
+        assert img[y, x].mean() > 180, f"the corner at {(y, x)} is not paper"
+    ink = (img.mean(axis=2) < 150).mean()
+    assert 0.005 < ink < 0.45, f"the plan is {ink:.1%} ink"
+
+
+def test_the_city_plan_draws_the_water_its_site_claims():
+    """A river-mouth capital must actually have a river and a sea."""
+    spec = WorldSpec(seed=1, width=420, height=300, lat_top=60.0, lat_bottom=44.0)
+    world = build_world(spec)
+    labels = build_labels(world, Namer(spec.seed), avoid=("Testland",))
+    feats = features.measure(world, labels)
+    town = feats.chief_town()
+    img = np.asarray(city.plan(world, feats, "Testland", seed=1)).astype(np.float32)
+    blue = (img[..., 2] - img[..., 0] > 18) & (img[..., 2] > 150)
+    assert blue.sum() > 2000, "no water is drawn on a river-mouth plan"
+    if "river_mouth" in set(town.site_tags or ()):
+        # The sea lies in the lower-right corner of the sheet.
+        assert blue[1100:, 1300:].sum() > 1000, "the harbour town has no sea"

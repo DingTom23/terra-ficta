@@ -974,3 +974,23 @@ fields, so the archipelago does not inherit the main island's harmonics.
 
 The spine still exists, but only to place mountain belts: orogeny follows a
 grain even when the coast does not.
+
+
+## 39. A plan is a promise about a place
+
+The capital city plan is the only page in the book at a human scale, and that
+makes it the easiest page to fake. A pretty star of streets would be a lie if
+the town it claims to show stood at a river crossing with no river in the
+drawing, or at a harbour with no sea.
+
+So the plan is derived from the same `sites` tags the dictionary uses. A
+`river_mouth` town gets a river and a sea and piers; a `confluence` gets two
+arms of water; a `lake_outlet` gets a lake; a `crossing` gets a bridge; a
+`gate` gets hill contours under the walls. The wall encloses a measured area,
+the legend prints the town's own population and elevation, and the locator
+inset is the country's actual silhouette with the town marked on it.
+
+The drawing itself is vector work: an irregular enceinte with eight bastions,
+six gates, primary roads bent by a sine so they are not radii, three ring
+roads, a polar field of building blocks, and a legend panel that has to hold
+its own against the map.

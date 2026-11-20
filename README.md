@@ -50,7 +50,8 @@ finished plate:
 | **The dictionary** | one alphabetical entry per named place, set in two columns, every figure in it measured off the terrain: rank, population, elevation, distance inland, the river it stands on, the range it rises in, the sea it reaches |
 | **The journey** | a route from the seat of government to the town furthest from any other, written up as a road book: where it crosses water, where it climbs, which province it enters, and how far it has come, every figure measured on the way |
 | **The sections** | two measured profiles cut through the country — west to east over the highest ground, north to south through the capital — with the vertical exaggeration printed, because a country is a hundred times wider than its mountains are high |
-| **The book** | title page, colophon, contents with dot leaders, numbered plates, a survey, a dictionary, a journey and a page of sections per country, an index of names whose folios point at the entries |
+| **The capital** | a town plan of the seat of government at a scale no other page uses: walls and bastions, a radial street net, a market square, a cathedral, a town hall, a citadel, a bridge and, where the site calls for them, a harbour and its piers. The river, the coast and the hill in the plan are the ones the country sheet and the dictionary describe |
+| **The book** | title page, colophon, contents with dot leaders, numbered plates, a survey, a dictionary, a journey, a page of sections and a plan of the capital per country, an index of names whose folios point at the entries |
 
 Output is a PNG at roughly 2700×2000, a bound PDF of a hundred-odd pages, and a
 static viewer you can pan and zoom.
