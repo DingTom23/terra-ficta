@@ -20,7 +20,7 @@ import numpy as np
 
 from .config import WorldSpec
 from .terrain import build_base, add_detail
-from . import climate, hydro, regions
+from . import climate, coast, hydro, regions
 
 CACHE_DIR = Path(__file__).resolve().parents[1] / "cache"
 
@@ -180,6 +180,12 @@ def build_world(spec: WorldSpec, use_cache: bool = True) -> World:
     carved = hydro.carve(base, first["accumulation"], depth=spec.carve_depth)
 
     height = add_detail(spec, carved).astype(np.float32)
+
+    # Deposition comes after the detail and before the final routing: a delta
+    # needs a river, and the channels have to find their way across the new
+    # ground rather than around it.
+    first_acc = hydro.drainage(height)["accumulation"]
+    height = coast.deposit(height, first_acc, spec).astype(np.float32)
 
     dr = hydro.drainage(height)
     # Cast here, not at the save call: the cache stores float32, so a cold world

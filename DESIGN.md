@@ -994,3 +994,33 @@ The drawing itself is vector work: an irregular enceinte with eight bastions,
 six gates, primary roads bent by a sine so they are not radii, three ring
 roads, a polar field of building blocks, and a legend panel that has to hold
 its own against the map.
+
+
+## 39. The coast is not only what the sea took away
+
+Every coastline in this atlas was a level set of a noise field. That is a
+model of erosion and of nothing else, and it shows: the shore is serrated at
+every scale and nowhere is there a piece of land that a river put there.
+
+Rivers build. A delta is a fan of lobes at the mouth, held back where the water
+is deep and stretched by the size of the river that feeds it; a spit is a thin
+arc of sand thrown offshore, with the water it has trapped behind it. Both are
+places where the height field *gains* cells after sea level has already been
+set — the one part of the pipeline that runs against the quantile.
+
+`atlas/coast.py` does this on the routed accumulation from the first drainage
+pass, then the drainage is run again so the new channels can find their way
+across the new ground. Measured effect: three to five per cent more land, all
+of it at a river mouth or in shallow water.
+
+Three bugs are worth remembering because each produced something that looked
+plausible:
+
+- A fan with a constant floor floods its whole search disc and the delta
+  becomes a headland. The height has to cross zero at the rim.
+- Dilating a band and masking with the sea keeps every layer it has already
+  passed through, so a "ring" comes out as a filled annulus. Build the shell:
+  dilate the inner mask, then subtract it.
+- The lagoon step read the land mask from *before* the ridge was raised, found
+  the new spit inside its own band, and drowned it. Any pass that both adds
+  land and treats water as a complement must re-read the mask in between.

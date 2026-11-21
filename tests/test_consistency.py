@@ -646,3 +646,89 @@ def test_the_city_plan_draws_the_water_its_site_claims():
     if "river_mouth" in set(town.site_tags or ()):
         # The sea lies in the lower-right corner of the sheet.
         assert blue[1100:, 1300:].sum() > 1000, "the harbour town has no sea"
+
+
+def _coast_pair(seed=4, width=400, height=280):
+    """The same country with and without coastal deposition."""
+    from atlas import coast
+    from atlas.cli import latitude_for
+    from atlas.config import WorldSpec
+    from atlas.world import build_world
+
+    lat_top, lat_bottom = latitude_for(seed)
+    spec = WorldSpec(seed=seed, width=width, height=height,
+                     lat_top=lat_top, lat_bottom=lat_bottom)
+    real = build_world(spec, use_cache=False)
+
+    original = coast.deposit
+    coast.deposit = lambda height, acc, spec, **kw: height
+    try:
+        bare = build_world(spec, use_cache=False)
+    finally:
+        coast.deposit = original
+    return real, bare
+
+
+def test_deposition_only_ever_adds_land():
+    """A delta and a spit are things arriving; nothing is taken away."""
+    real, bare = _coast_pair()
+    gained = (real.height > 0) & ~(bare.height > 0)
+    lost = (bare.height > 0) & ~(real.height > 0)
+    assert int(gained.sum()) > 500, "deposition added no land at all"
+    assert int(lost.sum()) == 0, f"deposition drowned {int(lost.sum())} cells"
+
+
+def test_a_delta_stands_at_a_river_mouth():
+    """New land must be where a river reaches the sea, not out at random."""
+    import numpy as np
+    from atlas import coast
+
+    real, bare = _coast_pair()
+    gained = (real.height > 0) & ~(bare.height > 0)
+    acc = np.where(bare.height > 0, np.asarray(bare.accumulation, float), 0.0)
+    mouths = coast._mouths(bare.height, acc, limit=5)
+    assert mouths, "no river mouth found to build a delta at"
+
+    ys, xs = np.nonzero(gained)
+    near = 0
+    for x, y, _power in mouths:
+        d2 = (xs - x) ** 2 + (ys - y) ** 2
+        near += int((d2 <= 34 ** 2).sum())
+    assert near > 0.6 * len(xs), (
+        f"only {near} of {len(xs)} new cells lie at a river mouth")
+
+
+def test_a_spit_leaves_water_behind_it():
+    """A barrier that touches the shore everywhere is a headland, not a spit."""
+    import numpy as np
+    from atlas import coast
+    from atlas.cli import latitude_for
+    from atlas.config import WorldSpec
+    from atlas.world import build_world
+
+    lat_top, lat_bottom = latitude_for(4)
+    spec = WorldSpec(seed=4, width=400, height=280,
+                     lat_top=lat_top, lat_bottom=lat_bottom)
+    original = coast.deposit
+    coast.deposit = lambda height, acc, spec, **kw: original(
+        height, acc, spec, deltas=0, spits=2)
+    try:
+        spit_world = build_world(spec, use_cache=False)
+    finally:
+        coast.deposit = original
+    coast.deposit = lambda height, acc, spec, **kw: height
+    try:
+        bare = build_world(spec, use_cache=False)
+    finally:
+        coast.deposit = original
+
+    added = (spit_world.height > 0) & ~(bare.height > 0)
+    assert int(added.sum()) > 0, "no spit was built"
+
+    # Water must remain inside the box the ridge spans: the lagoon is the
+    # whole point, and a barrier that leaves no water behind it is a headland.
+    ys, xs = np.nonzero(added)
+    ys0, xs0 = int(ys.min()), int(xs.min())
+    ys1, xs1 = int(ys.max()), int(ys.max() if False else xs.max())
+    inner = spit_world.height[ys0:ys1 + 1, xs0:xs1 + 1]
+    assert int((inner <= 0).sum()) > 0, "the spit left no water inside its reach"

@@ -101,7 +101,7 @@ python -m atlas --seed 7 --width 900 --height 600 --scale 2
 The pipeline is ordered, and the order matters more than any single step.
 
 ```
-landmass  →  drainage  →  carved valleys  →  fine detail  →  drainage again
+landmass  →  drainage  →  carved valleys  →  fine detail  →  deposition  →  drainage again
 ```
 
 **1. Landmass.** The main island is a radial field with a handful of low
@@ -126,18 +126,24 @@ discretised on a raster with a stability clamp, converges to a staircase.
 **4. Detail.** High-frequency ridges are added *after* routing. Put in earlier,
 they shatter the network into thousands of competing puddles.
 
-**5. Climate.** Latitude is drawn from the seed, so each country sits in its own
+**5. Deposition.** Rivers carry mud to the sea and the sea builds it into
+land: a fan of lobes at each mouth, held back by deep water and stretched by
+the size of the river; and here and there a curved ridge of sand offshore with
+a lagoon behind it. The height field gains cells here — the coastline stops
+being purely the level set of a noise field.
+
+**6. Climate.** Latitude is drawn from the seed, so each country sits in its own
 band — one is arctic, another Mediterranean. Temperature falls with latitude and
 height; moisture is carried in from the west, lifted over ridges and dropped in
 their rain shadow; a Whittaker classification turns the two into biomes.
 
-**6. Ice.** A snowline falls from 5,200 m in the tropics to sea level at the pole.
+**7. Ice.** A snowline falls from 5,200 m in the tropics to sea level at the pole.
 Land above it is glacier; above 66.5 degrees the whole surface is a sheet. Sea ice
 is drawn from a noise-warped margin, as a wash inside a dotted limit with a sparse
 scatter of floes at the edge — because a straight edge of ice is the one thing an
 arctic chart never shows, and a field of white shapes is camouflage, not ice.
 
-**7. Names.** Each region draws from its own phonology — a distinct onset/vowel/
+**8. Names.** Each region draws from its own phonology — a distinct onset/vowel/
 coda inventory. Before a settlement is named, its site is measured: river
 mouth, lake outlet, confluence, crossing, harbour, gap in the hills. The
 suffix is then drawn from the claims the ground supports — *-mouth* only at a
@@ -145,7 +151,7 @@ mouth, *-ford* and *-bridge* only at a crossing, *-gate* only in a gap — while
 the ordinary settlement suffixes remain available everywhere. Labels are
 placed greedily, measured with the font that will actually draw them.
 
-**8. The sheet.** Layers are composited in ink order, then laid onto toned paper.
+**9. The sheet.** Layers are composited in ink order, then laid onto toned paper.
 
 See [DESIGN.md](DESIGN.md) for the reasoning behind each choice, including the
 ones that turned out to be wrong.
