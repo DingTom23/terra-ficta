@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 from . import decor
 from .config import WorldSpec
-from .palette import PAPER, INK, INK_SOFT, INK_WATER, hypsometric
+from .palette import PAPER, INK, INK_SOFT, hypsometric
 from .shade import hillshade
 from .world import build_world
 

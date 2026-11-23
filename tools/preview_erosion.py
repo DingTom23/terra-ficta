@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -15,6 +15,7 @@ from atlas.config import WorldSpec
 from atlas.terrain import build_base
 from atlas.shade import hillshade, ambient_occlusion
 from atlas.palette import hypsometric, bathymetric
+from atlas.fonts import font
 from atlas import hydro
 
 W, H = 900, 600
@@ -78,14 +79,14 @@ def main():
     arr3[lake] = np.array([0.35, 0.55, 0.70])
     img3 = Image.fromarray((arr3 * 255).astype(np.uint8))
 
-    font = ImageFont.truetype("C:/Windows/Fonts/GARA.TTF", 20)
+    font_face = font("serif", 20)
     sheet = Image.new("RGB", (2 * W + 36, 2 * H + 60), (28, 28, 30))
     for i, (im, lab) in enumerate([(img0, "base"), (img1, "carved valleys"),
                                    (img2, f"streams (A>{thr})"), (img3, "lakes > 2 m")]):
         x = 12 + (i % 2) * (W + 12)
         y = 12 + (i // 2) * (H + 12)
         sheet.paste(im, (x, y))
-        ImageDraw.Draw(sheet).text((x + 8, y + 6), lab, fill=(240, 230, 210), font=font)
+        ImageDraw.Draw(sheet).text((x + 8, y + 6), lab, fill=(240, 230, 210), font=font_face)
 
     out = Path(__file__).resolve().parents[1] / "out" / "preview_erosion.png"
     out.parent.mkdir(exist_ok=True)

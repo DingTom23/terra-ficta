@@ -11,13 +11,12 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
-from .config import WorldSpec
 from .climate import BIOMES
 from .filters import blur
-from .noise import fbm, smoothstep
-from .palette import (PAPER, PAPER_DARK, PAPER_OLD, INK, INK_SOFT, INK_WATER, INK_RIVER,
+from .noise import fbm
+from .palette import (PAPER, INK, INK_WATER, INK_RIVER,
                       hypsometric, bathymetric)
 from .shade import hillshade, ambient_occlusion
 
@@ -314,7 +313,6 @@ def render_engraved(world, scale=2, contour_interval=100.0, tint=0.30,
     It is not "the physical plate with more strokes".  It is a different claim
     about how a map should be read.
     """
-    spec = world.spec
     hh, ww = world.height.shape
     RW, RH = ww * scale, hh * scale
 
@@ -758,7 +756,6 @@ def render_climate(world, scale=2, relief=0.26, base_colour=None):
 
     img = sea_rgb * (1.0 - land_m[..., None]) + land_rgb * land_m[..., None]
 
-    ink = np.array(INK, dtype=np.float32)
     cool = np.array([0.30, 0.42, 0.54], dtype=np.float32)
     warm = np.array([0.56, 0.30, 0.24], dtype=np.float32)
     img = _mix(img, cool, iso_rain * 0.50 * land_m)

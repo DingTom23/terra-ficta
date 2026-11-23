@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: python -m pip install -e .
+
+      - name: Tests
+        run: python -m tests
+
+      - name: Render a smoke sheet
+        run: >-
+          python -m atlas --seed 7 --width 420 --height 280 --scale 2
+          --out out/smoke.png
+
+      - name: Upload the sheet
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.os }}-py${{ matrix.python }}
+          path: out/smoke.png
+          if-no-files-found: error
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Ruff
+        run: python -m pip install ruff==0.17.6 && ruff check .
+
+  package:
+    name: the wheel carries the type
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build a wheel
+        run: python -m pip wheel . --no-deps --wheel-dir dist
+
+      - name: Check the package data
+        shell: bash
+        run: |
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          wheel = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          fonts = sorted(n for n in names if n.startswith("atlas/fonts/"))
+
+          assert any(n.endswith(".ttf") for n in fonts), f"no faces in {wheel}"
+          assert any(n.endswith(".txt") for n in fonts), f"no licences in {wheel}"
+          for face in (
+              "EBGaramond-Regular.ttf",
+              "EBGaramond-Bold.ttf",
+              "EBGaramond-Italic.ttf",
+              "GentiumBookPlus-Regular.ttf",
+              "GentiumBookPlus-Bold.ttf",
+              "GentiumBookPlus-Italic.ttf",
+          ):
+              assert f"atlas/fonts/{face}" in fonts, f"{face} missing from {wheel}"
+
+          print(wheel)
+          print("\n".join(fonts))
+          PY

@@ -1,6 +1,6 @@
 [project]
 name = "terra-ficta"
-version = "0.6.0"
+version = "0.7.0"
 description = "Terra Ficta: a deterministic procedural cartography engine. Seeds in, antique maps out."
 readme = "README.md"
 license = { text = "MIT" }
@@ -16,3 +16,16 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["atlas"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+# The type travels with the engine: a sheet must not depend on a system font.
+atlas = ["fonts/*.ttf", "fonts/*.txt"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+# A narrow gate: syntax, names that do not exist, and dead imports or locals.
+# The engine's own tests are the real correctness check.
+select = ["E9", "F63", "F7", "F82", "F401", "F541", "F841"]

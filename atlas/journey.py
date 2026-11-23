@@ -13,7 +13,6 @@ drawn from, so the journey and the map cannot disagree.
 
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -139,7 +138,6 @@ def plan(world, feats, factor=3):
     hh, ww = world.height.shape
     km_x, km_y = _cell_km(world)
     prov = world.provinces
-    rec = world.drainage.get("receivers")
 
     # A channel is judged against the country's own drainage, not against the
     # largest river in it: the trunk is orders of magnitude above a tributary,
@@ -154,7 +152,6 @@ def plan(world, feats, factor=3):
     total = 0.0
     last = path[0]
     elevs = []
-    seen_rivers = set()
     seen_provs = set()
     seen_towns = set()
 

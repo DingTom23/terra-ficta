@@ -8,33 +8,9 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
-from PIL import Image, ImageChops, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw
 
-FONT_DIR = "C:/Windows/Fonts"
-_SERIF = "GARA.TTF"
-_SERIF_BOLD = "GARABD.TTF"
-_SERIF_ITALIC = "GARAIT.TTF"
-_ANTIQUA = "BOOKOS.TTF"
-_ANTIQUA_BOLD = "BOOKOSB.TTF"
-_ANTIQUA_ITALIC = "BOOKOSI.TTF"
-
-_cache = {}
-
-
-def font(kind: str, size: int):
-    path = {
-        "serif": _SERIF,
-        "serif-bold": _SERIF_BOLD,
-        "serif-italic": _SERIF_ITALIC,
-        "antiqua": _ANTIQUA,
-        "antiqua-bold": _ANTIQUA_BOLD,
-        "antiqua-italic": _ANTIQUA_ITALIC,
-    }[kind]
-    key = (kind, size)
-    if key not in _cache:
-        _cache[key] = ImageFont.truetype(f"{FONT_DIR}/{path}", size)
-    return _cache[key]
+from .fonts import font
 
 
 def _rgb(c):
