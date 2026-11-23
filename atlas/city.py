@@ -410,7 +410,7 @@ def plan(world, feats, country, seed=0, size=(2400, 1700)):
     notes = [
         site_line,
         f"The enceinte encloses {math.pi * (R * R) / 10000.0:.0f} hectares.",
-        f"The six gates open on the roads to the country.",
+        "The six gates open on the roads to the country.",
     ]
     fy0 = py0 + ih + 30
     fnote = decor.font("serif-italic", int(pw * 0.0092))

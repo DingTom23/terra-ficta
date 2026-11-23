@@ -15,12 +15,12 @@ human, and a human only notices the labels that collide.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 
 import numpy as np
 
 from . import sites
-from .naming import Namer, Culture
+from .naming import Namer
 
 
 @dataclass

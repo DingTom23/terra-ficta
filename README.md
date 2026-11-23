@@ -1,5 +1,7 @@
 # Terra Ficta
 
+[![CI](https://github.com/DingTom23/terra-ficta/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DingTom23/terra-ficta/actions/workflows/ci.yml)
+
 **A deterministic procedural cartography engine.** Give it a seed; it gives you a
 continent — terrain, drainage, climate, place names, and a finished sheet drawn in
 the manner of a nineteenth-century relief atlas.
@@ -18,7 +20,7 @@ python -m atlas --seed 7
 ```
 
 ```
-  seed     7  terrain  21.2s  ink  21.0s  3180x2280
+  seed     7  terrain  21.2s  ink  31.1s  2904x2280
   -> out/atlas_0007.png
 ```
 
@@ -53,14 +55,15 @@ finished plate:
 | **The capital** | a town plan of the seat of government at a scale no other page uses: walls and bastions, a radial street net, a market square, a cathedral, a town hall, a citadel, a bridge and, where the site calls for them, a harbour and its piers. The river, the coast and the hill in the plan are the ones the country sheet and the dictionary describe |
 | **The book** | title page, colophon, contents with dot leaders, numbered plates, a survey, a dictionary, a journey, a page of sections and a plan of the capital per country, an index of names whose folios point at the entries |
 
-Output is a PNG at roughly 2700×2000, a bound PDF of a hundred-odd pages, and a
+Output is a PNG at roughly 2900×2300, a bound PDF of a hundred-odd pages, and a
 static viewer you can pan and zoom.
 
 ---
 
 ## Quick start
 
-Requires Python 3.10+, `numpy` and `Pillow`. Nothing else.
+Requires Python 3.10+, `numpy` and `Pillow`. Nothing else, and no system font:
+the faces the book is set in travel inside the package.
 
 ```bash
 # one sheet
@@ -88,11 +91,28 @@ python -m atlas --seed 7 --width 900 --height 600 --scale 2
 | `--seed` | which world |
 | `--seeds` | a range (`1-8`) or a list (`3,7,11`) |
 | `--width` / `--height` | terrain grid, in cells (default 1400×950) |
-| `--scale` | output pixels per grid cell (default 2) |
+| `--scale` | output pixels per grid cell (default 0, sized to the plate) |
 | `--title` | override the invented country name |
 | `--book` / `--pdf` | bind the results into one document |
 | `--gallery` | write `index.html` beside the images |
 | `--viewer` | write `viewer.html`: pan, zoom, read the gazetteer |
+
+---
+
+## Fonts
+
+The atlas is set in two faces that travel with it: **EB Garamond** for the map,
+the prose and the dictionary, and **Gentium Book Plus** for titles and keys.
+Both are under the SIL Open Font License 1.1, which permits commercial use and
+redistribution; the licence texts sit beside the font files in
+[`atlas/fonts/`](atlas/fonts/). No system font needs to be installed.
+
+- EB Garamond: the [EB Garamond Project](https://github.com/octaviopardo/EBGaramond12)
+- Gentium Book Plus: [SIL International](https://software.sil.org/gentium/)
+
+To set an edition in a different licensed face, point `ATLAS_FONT_DIR` at a
+directory containing files with the same names. The bundled directory is used
+otherwise.
 
 ---
 
@@ -166,6 +186,8 @@ atlas/
   noise.py       gradient noise, fBm, ridged multifractal, domain warping
   terrain.py     landmass, orogenic belts, fine detail
   hydro.py       depression filling, flow routing, accumulation, valley carving
+  coast.py       deltas, spits, and land built after the sea
+  filters.py     the small blurs the rest of the engine uses
   climate.py     temperature, orographic moisture, Whittaker biomes
   regions.py     provinces grown from watersheds
   roads.py       least-cost roads: spanning tree plus A*
@@ -175,17 +197,25 @@ atlas/
   layout.py      framing: which window of the world, and where the furniture fits
   render.py      the drawing itself, physical and political
   decor.py       frame, graticule, compass, scale bar, cartouche, legend
+  fonts.py       where the type comes from
+  fonts/         bundled faces and their licences
   naming.py      invented phonologies and toponymy
   sites.py       what kind of place a settlement stands on
   labels.py      feature extraction and label placement
   features.py    measuring the country: rivers, towns, ranges, provinces
   compose.py     the finished sheet
   gazetteer.py   prose, written from the measurements
+  city.py        the capital's street plan
+  compare.py     the countries as silhouettes at one scale
+  journey.py     a route across the country, written as a road book
+  section.py     measured profiles through the ground
+  worldmap.py    the known-world frontispiece
   book.py        front matter, contents, index
   web.py         the static viewer
   cli.py         command line
 tests/           the invariants the book depends on
 tools/           development benches used while building this
+.github/         CI: tests on Linux and Windows, and a wheel built and checked
 out/             results
 cache/           generated worlds, keyed by a hash of the spec
 ```
@@ -210,6 +240,8 @@ is not "does it run" but the claims the book makes about the world:
   filled surface has no interior pit;
 - a warm cache produces the same world as a cold one, array by array, and lays
   out the same labels;
+- every face the book asks for is packaged with the engine, so the fonts on the
+  test machine cannot change a sheet;
 - every province that is tinted on the plate is also named on it;
 - every town speaks the language of the province it stands in;
 - every toponymic suffix is true to the ground: a *-mouth* town is at a river
@@ -226,8 +258,9 @@ is not "does it run" but the claims the book makes about the world:
 
 Every random draw comes from a `numpy` generator seeded from the world seed, and
 every noise field is a pure function of its coordinates. There is no global RNG
-state and no dependence on iteration order in a hash map. Given the same seed and
-the same version of this code, the output is byte-identical.
+state and no dependence on iteration order in a hash map. The faces are part of
+the package rather than borrowed from the machine. Given the same seed and the
+same version of this code, the output is byte-identical.
 
 That property is the point. A map that cannot be reproduced is a drawing; a map
 that can is a place.

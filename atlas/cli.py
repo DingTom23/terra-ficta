@@ -24,7 +24,7 @@ COLOPHON = [
     "names are coined from a phonology invented for each province.",
     "The same integer always produces the same country.  There is no other copy "
     "of it anywhere, and no one has been there.",
-    "Composed with Pillow and numpy.  Set in Garamond and Book Antiqua.",
+    "Composed with Pillow and numpy.  Set in EB Garamond and Gentium Book Plus.",
 ]
 
 

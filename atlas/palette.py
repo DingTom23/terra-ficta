@@ -51,7 +51,6 @@ def _ramp(values, stops):
     """Piecewise-linear colour ramp; `stops` is [(x, rgb), ...] ascending."""
     values = np.asarray(values, dtype=np.float64)
     out = np.zeros(values.shape + (3,), dtype=np.float64)
-    xs = [s[0] for s in stops]
     out[..., :] = stops[0][1]
     for i in range(len(stops) - 1):
         x0, c0 = stops[i]

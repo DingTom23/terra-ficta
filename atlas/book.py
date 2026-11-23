@@ -7,8 +7,6 @@ index is what turns a set of pictures into something you can look things up in.
 
 from __future__ import annotations
 
-import math
-
 from PIL import Image, ImageDraw
 
 from . import decor

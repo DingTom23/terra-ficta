@@ -6,7 +6,6 @@ disk; this file just gives them somewhere to be looked at closely.
 
 from __future__ import annotations
 
-import html
 import json
 
 
